@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 50 50">
+    <g fill="none" stroke="var(--pink)" stroke-width="2.5">
+      <path d="M25 3 C29 12 24 16 25 25 C26 16 21 12 25 3 Z"></path>
+      <path d="M25 47 C29 38 24 34 25 25 C26 34 21 38 25 47 Z"></path>
+      <path d="M3 25 C12 21 16 26 25 25 C16 24 12 29 3 25 Z"></path>
+      <path d="M47 25 C38 21 34 26 25 25 C34 24 38 29 47 25 Z"></path>
+    </g>
+  </svg>

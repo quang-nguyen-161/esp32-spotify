@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 50 50">
+    <g fill="var(--pink)" stroke="var(--black)" stroke-width="2">
+      <path d="M25 3 C29 12 24 16 25 25 C26 16 21 12 25 3 Z"></path>
+      <path d="M25 47 C29 38 24 34 25 25 C26 34 21 38 25 47 Z"></path>
+      <path d="M3 25 C12 21 16 26 25 25 C16 24 12 29 3 25 Z"></path>
+      <path d="M47 25 C38 21 34 26 25 25 C34 24 38 29 47 25 Z"></path>
+      <path d="M9 9 C15 15 15 20 25 25 C20 15 15 15 9 9 Z"></path>
+      <path d="M41 9 C35 15 35 20 25 25 C30 15 35 15 41 9 Z"></path>
+      <path d="M9 41 C15 35 15 30 25 25 C20 35 15 35 9 41 Z"></path>
+      <path d="M41 41 C35 35 35 30 25 25 C30 35 35 35 41 41 Z"></path>
+    </g>
+  </svg>

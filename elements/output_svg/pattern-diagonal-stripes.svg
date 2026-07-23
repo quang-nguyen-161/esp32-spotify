@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="18" viewBox="0 0 180 18"><g stroke="var(--black)" stroke-width="3">
+    <line x1="0" y1="18" x2="18" y2="0"></line><line x1="18" y1="18" x2="36" y2="0"></line><line x1="36" y1="18" x2="54" y2="0"></line>
+    <line x1="54" y1="18" x2="72" y2="0"></line><line x1="72" y1="18" x2="90" y2="0"></line><line x1="90" y1="18" x2="108" y2="0"></line>
+    <line x1="108" y1="18" x2="126" y2="0"></line><line x1="126" y1="18" x2="144" y2="0"></line><line x1="144" y1="18" x2="162" y2="0"></line>
+    <line x1="162" y1="18" x2="180" y2="0"></line>
+  </g></svg>

@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Pastel UI Mockup</title>
+<style>
+  :root{
+    --pink:#ffb6d5; --pink-dark:#ff8fc4; --teal:#7fd8ea; --teal-dark:#4fc0dd;
+    --yellow:#fff3a0; --yellow-dark:#ffe14d; --black:#1a1a1a;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    width:1402px; height:1122px; position:relative; overflow:hidden;
+    font-family: monospace;
+    background-color:#c9a8f5;
+    background-image:
+      linear-gradient(rgba(255,255,255,.35) 1.5px, transparent 1.5px),
+      linear-gradient(90deg, rgba(255,255,255,.35) 1.5px, transparent 1.5px);
+    background-size: 40px 40px;
+  }
+
+  .abs{ position:absolute; }
+
+  /* ---------- window base ---------- */
+  .win{ border:3px solid var(--black); border-radius:4px; box-shadow:6px 6px 0 rgba(0,0,0,.25); }
+  .titlebar{ display:flex; align-items:center; justify-content:space-between; padding:6px 10px; border-bottom:3px solid var(--black); }
+  .tb-icons{ display:flex; gap:6px; }
+  .tb-icon{ width:16px; height:16px; border:2px solid var(--black); border-radius:2px; background:#fff; display:flex; align-items:center; justify-content:center; font-size:10px; line-height:1; }
+  .tb-icon.close{ background:#ff7a7a; }
+
+  /* ---------- sky window ---------- */
+  #window-sky{ left:96px; top:78px; width:610px; }
+  #window-sky .titlebar{ background:linear-gradient(90deg,var(--pink),var(--pink-dark)); }
+  #window-sky .body{ width:100%; height:658px; background:linear-gradient(#bfe6fb,#dff2fc); position:relative; overflow:hidden; }
+  .cloud{ position:absolute; background:#fff; border-radius:60px; box-shadow:0 0 0 2px #dfefff inset; }
+
+  /* ---------- heart list window ---------- */
+  #window-heartlist{ left:745px; top:82px; width:568px; }
+  #window-heartlist .titlebar{ background:linear-gradient(90deg,var(--teal),var(--teal-dark)); }
+  #window-heartlist .body{ width:100%; height:490px; background:#fff; padding:20px 16px; position:relative; }
+  .heart-row{ display:flex; align-items:center; gap:14px; margin:14px 0; }
+  .dots{ flex:1; border-bottom:3px dotted var(--black); height:0; margin-top:14px; }
+  .scrollbar{ position:absolute; right:10px; top:16px; bottom:16px; width:18px; background:#eee; border:2px solid var(--black); border-radius:8px; }
+  .scroll-thumb{ position:absolute; left:1px; right:1px; top:12%; height:60%; background:var(--pink); border:2px solid var(--black); border-radius:8px; }
+
+  /* ---------- music player window ---------- */
+  #window-player{ left:745px; top:680px; width:568px; }
+  #window-player .titlebar{ background:linear-gradient(90deg,var(--yellow),var(--yellow-dark)); }
+  #window-player .body{ width:100%; height:170px; background:linear-gradient(#ffd6ea,#ffc2e0); border-top:3px solid var(--black); display:flex; align-items:flex-end; gap:5px; padding:18px; }
+  .bar{ width:6px; background:#ff9fd0; border:1.5px solid var(--black); }
+
+  /* ---------- search bar + button ---------- */
+  #search-bar{ left:158px; top:846px; width:435px; height:64px; background:#f4eef0; border:3px solid var(--black); border-radius:6px; box-shadow:5px 5px 0 var(--teal); }
+  #btn-yellow{ left:237px; top:975px; width:280px; height:44px; background:var(--yellow-dark); border:3px solid var(--black); border-radius:5px; }
+
+  /* ---------- slider ---------- */
+  #slider{ left:745px; top:900px; width:568px; height:32px; border:3px solid var(--black); border-radius:16px; background:#fff; position:relative; }
+  #slider .fill{ position:absolute; left:3px; top:3px; bottom:3px; width:58%; background:var(--teal); border-radius:14px; }
+  #slider .handle{ position:absolute; left:56%; top:50%; transform:translateY(-50%); width:28px; height:28px; background:var(--pink); border:3px solid var(--black); border-radius:50%; }
+
+  /* ---------- control buttons ---------- */
+  .ctrl-btn{ width:64px; height:64px; border:3px solid var(--black); border-radius:8px; background:var(--teal); display:flex; align-items:center; justify-content:center; font-size:22px; }
+  .ctrl-btn.pause{ background:var(--yellow); }
+  #btn-rewind{ left:815px; top:975px; }
+  #btn-pause{ left:963px; top:975px; }
+  #btn-forward{ left:1145px; top:975px; }
+
+  /* ---------- hearts ---------- */
+  .heart{ width:60px; height:54px; }
+  #heart-pink-standalone{ left:70px; top:815px; }
+  #heart-blue-standalone{ left:620px; top:885px; }
+
+  /* ---------- burst / flower / patterns ---------- */
+  #burst-black{ left:70px; top:965px; }
+  #flower-pink{ left:670px; top:1010px; }
+  #plus-row{ left:245px; top:1035px; font-size:20px; letter-spacing:4px; }
+  #x-row-corner{ left:1120px; top:35px; font-size:20px; letter-spacing:8px; }
+  #x-row-bottom{ left:65px; top:1055px; font-size:18px; letter-spacing:6px; }
+
+  svg{ display:block; }
+</style>
+</head>
+<body>
+
+<!-- ================= SKY WINDOW ================= -->
+<div class="abs win" id="window-sky">
+  <div class="titlebar"><span></span>
+    <div class="tb-icons"><div class="tb-icon">▁</div><div class="tb-icon">▢</div><div class="tb-icon close">✕</div></div>
+  </div>
+  <div class="body">
+    <div class="cloud" style="width:260px;height:100px;left:0;top:100px;"></div>
+    <div class="cloud" style="width:210px;height:75px;right:30px;top:340px;"></div>
+    <div class="cloud" style="width:330px;height:120px;left:-30px;bottom:30px;"></div>
+  </div>
+</div>
+
+<!-- ================= HEART LIST WINDOW ================= -->
+<div class="abs win" id="window-heartlist">
+  <div class="titlebar"><span style="font-size:16px;">▶</span>
+    <div class="tb-icons"><div class="tb-icon">▁</div><div class="tb-icon">▢</div><div class="tb-icon close">✕</div></div>
+  </div>
+  <div class="body">
+    <div class="scrollbar"><div class="scroll-thumb"></div></div>
+    <div style="padding-right:28px;" id="heartlist-rows"></div>
+  </div>
+</div>
+
+<!-- ================= PLAYER WINDOW ================= -->
+<div class="abs win" id="window-player">
+  <div class="titlebar"><span>✦</span>
+    <div class="tb-icons"><div class="tb-icon">▁</div><div class="tb-icon">▢</div><div class="tb-icon close">✕</div></div>
+  </div>
+  <div class="body" id="visualizer"></div>
+</div>
+
+<!-- ================= SEARCH BAR + BUTTON ================= -->
+<div class="abs" id="search-bar"></div>
+<div class="abs" id="btn-yellow"></div>
+
+<!-- ================= SLIDER ================= -->
+<div class="abs" id="slider"><div class="fill"></div><div class="handle"></div></div>
+
+<!-- ================= CONTROL BUTTONS ================= -->
+<div class="abs ctrl-btn" id="btn-rewind">◀◀</div>
+<div class="abs ctrl-btn pause" id="btn-pause">❚❚</div>
+<div class="abs ctrl-btn" id="btn-forward">▶▶</div>
+
+<!-- ================= STANDALONE HEARTS ================= -->
+<div class="abs" id="heart-pink-standalone">
+  <svg class="heart" viewBox="0 0 60 54"><path d="M30 50 L6 28 C-2 18 6 4 20 6 C26 7 30 12 30 16 C30 12 34 7 40 6 C54 4 62 18 54 28 Z" fill="var(--pink)" stroke="var(--black)" stroke-width="3" stroke-linejoin="round"/></svg>
+</div>
+<div class="abs" id="heart-blue-standalone">
+  <svg class="heart" viewBox="0 0 60 54"><path d="M30 50 L6 28 C-2 18 6 4 20 6 C26 7 30 12 30 16 C30 12 34 7 40 6 C54 4 62 18 54 28 Z" fill="var(--teal)" stroke="var(--black)" stroke-width="3" stroke-linejoin="round"/></svg>
+</div>
+
+<!-- ================= BURST / FLOWER ================= -->
+<div class="abs" id="burst-black">
+  <svg width="80" height="80" viewBox="0 0 80 80">
+    <g fill="var(--black)"><ellipse cx="40" cy="40" rx="26" ry="20"/>
+    <g stroke="var(--black)" stroke-width="4"><line x1="40" y1="2" x2="40" y2="78"/><line x1="2" y1="40" x2="78" y2="40"/><line x1="12" y1="12" x2="68" y2="68"/><line x1="68" y1="12" x2="12" y2="68"/></g></g>
+  </svg>
+</div>
+<div class="abs" id="flower-pink">
+  <svg width="70" height="70" viewBox="0 0 70 70">
+    <g fill="var(--pink)" stroke="var(--black)" stroke-width="2.5">
+      <path d="M35 5 C40 20 30 20 35 35 C40 20 50 20 35 5 Z"/>
+      <path d="M35 65 C40 50 30 50 35 35 C40 50 50 50 35 65 Z"/>
+      <path d="M5 35 C20 30 20 40 35 35 C20 30 20 20 5 35 Z"/>
+      <path d="M65 35 C50 30 50 40 35 35 C50 30 50 20 65 35 Z"/>
+    </g>
+  </svg>
+</div>
+
+<!-- ================= PATTERNS ================= -->
+<div class="abs" id="plus-row">++++++++++</div>
+<div class="abs" id="x-row-corner">××××××</div>
+<div class="abs" id="x-row-bottom">××××</div>
+
+<!-- ================= SCATTERED SPARKLES ================= -->
+<div class="abs" style="left:110px;top:35px;" id="sparkle-1"></div>
+<div class="abs" style="left:150px;top:20px;" id="sparkle-2"></div>
+<div class="abs" style="left:40px;top:75px;" id="sparkle-3"></div>
+<div class="abs" style="left:35px;top:555px;" id="sparkle-4"></div>
+<div class="abs" style="left:55px;top:775px;" id="sparkle-5"></div>
+<div class="abs" style="left:670px;top:790px;" id="sparkle-6"></div>
+<div class="abs" style="left:640px;top:815px;" id="sparkle-7"></div>
+<div class="abs" style="left:590px;top:1005px;" id="sparkle-8"></div>
+<div class="abs" style="left:1355px;top:170px;" id="sparkle-9"></div>
+<div class="abs" style="left:1290px;top:35px;" id="sparkle-10"></div>
+<div class="abs" style="left:1300px;top:1000px;" id="sparkle-11"></div>
+<div class="abs" style="left:1335px;top:1035px;" id="sparkle-12"></div>
+
+<script>
+  // heart-list rows
+  const heartSVG = `<svg width="30" height="27" viewBox="0 0 60 54">
+    <path d="M30 50 L6 28 C-2 18 6 4 20 6 C26 7 30 12 30 16 C30 12 34 7 40 6 C54 4 62 18 54 28 Z"
+      fill="var(--pink)" stroke="var(--black)" stroke-width="4" stroke-linejoin="round"/></svg>`;
+  const rowsHTML = Array(6).fill(`<div class="heart-row">${heartSVG}<div class="dots"></div></div>`).join('');
+  document.getElementById('heartlist-rows').innerHTML = rowsHTML;
+
+  // visualizer bars
+  const vis = document.getElementById('visualizer');
+  const heights = [10,20,35,15,40,55,30,45,60,35,20,50,65,40,25,55,45,20,60,35,15,45,55,25,10,30];
+  heights.forEach(h=>{
+    const b=document.createElement('div');
+    b.className='bar'; b.style.height=h+'px';
+    vis.appendChild(b);
+  });
+
+  // scattered sparkles (small 4-point stars, varying styles)
+  function sparkleSVG(size, fill, stroke){
+    return `<svg width="${size}" height="${size}" viewBox="0 0 30 30">
+      <path d="M15 1 C15.5 10 19 14 29 15 C19 16 15.5 20 15 29 C14.5 20 11 16 1 15 C11 14 14.5 10 15 1 Z"
+      fill="${fill}" stroke="${stroke}" stroke-width="2" stroke-linejoin="round"/></svg>`;
+  }
+  const sparkles = [
+    {id:'sparkle-1', size:26, fill:'#fff', stroke:'var(--black)'},
+    {id:'sparkle-2', size:20, fill:'#fff', stroke:'var(--black)'},
+    {id:'sparkle-3', size:38, fill:'#fff', stroke:'var(--black)'},
+    {id:'sparkle-4', size:34, fill:'#fff', stroke:'var(--black)'},
+    {id:'sparkle-5', size:24, fill:'#fff', stroke:'var(--black)'},
+    {id:'sparkle-6', size:18, fill:'none', stroke:'var(--black)'},
+    {id:'sparkle-7', size:34, fill:'#fff', stroke:'var(--black)'},
+    {id:'sparkle-8', size:20, fill:'#fff', stroke:'var(--black)'},
+    {id:'sparkle-9', size:38, fill:'#fff', stroke:'var(--black)'},
+    {id:'sparkle-10', size:22, fill:'#fff', stroke:'var(--black)'},
+    {id:'sparkle-11', size:36, fill:'#fff', stroke:'var(--black)'},
+    {id:'sparkle-12', size:22, fill:'#fff', stroke:'var(--black)'},
+  ];
+  sparkles.forEach(s=>{
+    document.getElementById(s.id).innerHTML = sparkleSVG(s.size, s.fill, s.stroke);
+  });
+</script>
+</body>
+</html>

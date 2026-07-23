@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 50 50">
+    <g fill="var(--black)"><ellipse cx="25" cy="25" rx="15" ry="12"></ellipse>
+    <g stroke="var(--black)" stroke-width="3"><line x1="25" y1="1" x2="25" y2="49"></line><line x1="1" y1="25" x2="49" y2="25"></line><line x1="8" y1="8" x2="42" y2="42"></line><line x1="42" y1="8" x2="8" y2="42"></line></g></g>
+  </svg>

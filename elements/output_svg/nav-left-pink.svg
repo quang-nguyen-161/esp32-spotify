@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xhtml="http://www.w3.org/1999/xhtml"
+     width="40" height="40" viewBox="0 0 40 40">
+  <foreignObject x="0" y="0" width="40" height="40">
+    <xhtml:div xmlns="http://www.w3.org/1999/xhtml" style="all:initial;">
+      <style>
+  :root{
+    --pink:#ffb6d5; --pink-dark:#ff8fc4; --teal:#7fd8ea; --teal-dark:#4fc0dd;
+    --yellow:#fff3a0; --yellow-dark:#ffe14d; --sky:#a9defc; --white:#ffffff;
+    --black:#1a1a1a;
+  }
+  body{ background:#000; font-family: monospace; padding:40px; }
+  .element{ display:inline-block; background:transparent; margin:16px; padding:14px; vertical-align:top; }
+  .label{ color:#0f0; font-size:10px; margin-bottom:6px; }
+
+  .win{ border:2px solid var(--black); border-radius:2px; box-shadow:5px 5px 0 rgba(0,0,0,.2); }
+  .titlebar{ display:flex; align-items:center; justify-content:space-between; padding:2px 3px; border-bottom:2px solid var(--black); }
+  .tb-icons{ display:flex; gap:5px; }
+  .tb-icon{ width:10px; height:10px; border:2px solid var(--black); border-radius:2px; background:#fff; display:flex; align-items:center; justify-content:center; font-size:9px; }
+  .tb-icon.close{ background:#ff7a7a; }
+
+  .dots{ flex:1; border-bottom:2.5px dotted var(--black); height:0; margin-top:8px; }
+
+  .scrollbar{ width:16px; background:#f2f2f2; border:2px solid var(--black); border-radius:6px; position:relative; display:flex; flex-direction:column; align-items:center; }
+  .scroll-thumb{ position:absolute; left:1px; right:1px; top:15%; height:60%; border:2px solid var(--black); border-radius:6px; }
+
+  .sq-btn{ width:36px; height:36px; border:2.5px solid var(--black); border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:14px; background:#fff; }
+  .sq-btn.big{ width:44px; height:44px; font-size:16px; }
+
+  .pill{ height:36px; border:2.5px solid var(--black); border-radius:18px; }
+  .rect{ height: 50px; border:2.5px solid var(--black); border-radius:6px; }
+
+  .bubble{ border:2.5px solid var(--black); border-radius:14px; padding:10px 18px; position:relative; display:inline-block; }
+  .bubble:after{ content:''; position:absolute; bottom:-10px; left:16px; width:0; height:0; border:8px solid transparent; border-top-color:inherit; }
+
+  .track{ height:20px; border:2.5px solid var(--black); border-radius:10px; background:#fff; position:relative; }
+  .track .fill{ position:absolute; left:2px; top:2px; bottom:2px; border-radius:9px; }
+  .track .handle{ position:absolute; top:50%; transform:translateY(-50%); width:26px; height:26px; border:2.5px solid var(--black); border-radius:50%; }
+
+  .vtrack{ width:20px; height:150px; border:2.5px solid var(--black); border-radius:10px; background:#fff; position:relative; }
+  .vtrack .vfill{ position:absolute; left:2px; right:2px; bottom:2px; border-radius:9px; }
+
+  svg{ display:block; }
+</style>
+      <div style="display:inline-block;"><div class="sq-btn" style="background:var(--pink);">◀</div></div>
+    </xhtml:div>
+  </foreignObject>
+</svg>

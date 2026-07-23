@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="16" viewBox="0 0 180 16"><g stroke="var(--black)" stroke-width="2" stroke-linecap="round">
+    <g transform="translate(0,0)"><line x1="6" y1="0" x2="6" y2="12"></line><line x1="0" y1="6" x2="12" y2="6"></line></g>
+    <g transform="translate(22,0)"><line x1="6" y1="0" x2="6" y2="12"></line><line x1="0" y1="6" x2="12" y2="6"></line></g>
+    <g transform="translate(44,0)"><line x1="6" y1="0" x2="6" y2="12"></line><line x1="0" y1="6" x2="12" y2="6"></line></g>
+    <g transform="translate(66,0)"><line x1="6" y1="0" x2="6" y2="12"></line><line x1="0" y1="6" x2="12" y2="6"></line></g>
+    <g transform="translate(88,0)"><line x1="6" y1="0" x2="6" y2="12"></line><line x1="0" y1="6" x2="12" y2="6"></line></g>
+    <g transform="translate(110,0)"><line x1="6" y1="0" x2="6" y2="12"></line><line x1="0" y1="6" x2="12" y2="6"></line></g>
+    <g transform="translate(132,0)"><line x1="6" y1="0" x2="6" y2="12"></line><line x1="0" y1="6" x2="12" y2="6"></line></g>
+  </g></svg>

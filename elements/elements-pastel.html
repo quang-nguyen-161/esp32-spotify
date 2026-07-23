@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Pastel UI Kit</title>
+<style>
+  :root{
+    --pink:#ffb6d5; --pink-dark:#ff8fc4; --teal:#7fd8ea; --teal-dark:#4fc0dd;
+    --yellow:#fff3a0; --yellow-dark:#ffe14d; --sky:#a9defc; --white:#ffffff;
+    --black:#1a1a1a;
+  }
+  body{ background:#000; font-family: monospace; padding:40px; }
+  .element{ display:inline-block; background:transparent; margin:16px; padding:14px; vertical-align:top; }
+  .label{ color:#0f0; font-size:10px; margin-bottom:6px; }
+
+  .win{ border:2px solid var(--black); border-radius:2px; box-shadow:5px 5px 0 rgba(0,0,0,.2); }
+  .titlebar{ display:flex; align-items:center; justify-content:space-between; padding:2px 3px; border-bottom:2px solid var(--black); }
+  .tb-icons{ display:flex; gap:5px; }
+  .tb-icon{ width:10px; height:10px; border:2px solid var(--black); border-radius:2px; background:#fff; display:flex; align-items:center; justify-content:center; font-size:9px; }
+  .tb-icon.close{ background:#ff7a7a; }
+
+  .dots{ flex:1; border-bottom:2.5px dotted var(--black); height:0; margin-top:8px; }
+
+  .scrollbar{ width:16px; background:#f2f2f2; border:2px solid var(--black); border-radius:6px; position:relative; display:flex; flex-direction:column; align-items:center; }
+  .scroll-thumb{ position:absolute; left:1px; right:1px; top:15%; height:60%; border:2px solid var(--black); border-radius:6px; }
+
+  .sq-btn{ width:36px; height:36px; border:2.5px solid var(--black); border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:14px; background:#fff; }
+  .sq-btn.big{ width:44px; height:44px; font-size:16px; }
+
+  .pill{ height:36px; border:2.5px solid var(--black); border-radius:18px; }
+  .rect{ height: 50px; border:2.5px solid var(--black); border-radius:6px; }
+
+  .bubble{ border:2.5px solid var(--black); border-radius:14px; padding:10px 18px; position:relative; display:inline-block; }
+  .bubble:after{ content:''; position:absolute; bottom:-10px; left:16px; width:0; height:0; border:8px solid transparent; border-top-color:inherit; }
+
+  .track{ height:20px; border:2.5px solid var(--black); border-radius:10px; background:#fff; position:relative; }
+  .track .fill{ position:absolute; left:2px; top:2px; bottom:2px; border-radius:9px; }
+  .track .handle{ position:absolute; top:50%; transform:translateY(-50%); width:26px; height:26px; border:2.5px solid var(--black); border-radius:50%; }
+
+  .vtrack{ width:20px; height:150px; border:2.5px solid var(--black); border-radius:10px; background:#fff; position:relative; }
+  .vtrack .vfill{ position:absolute; left:2px; right:2px; bottom:2px; border-radius:9px; }
+
+  svg{ display:block; }
+</style>
+</head>
+<body>
+
+<!-- ===== WINDOWS ===== -->
+<div class="element" id="window-sky">
+  <div class="label">window-sky</div>
+  <div class="win" style="width:140px;">
+    <div class="titlebar" style="background:linear-gradient(90deg,var(--pink),var(--pink-dark));"><span></span>
+      <div class="tb-icons"><div class="tb-icon">▁</div><div class="tb-icon">▢</div><div class="tb-icon close">✕</div></div>
+    </div>
+    <div style="width:100%;height:140px;background:linear-gradient(#bfe6fb,#dff2fc);position:relative;overflow:hidden;">
+     </div>
+  </div>
+</div>
+
+<div class="element" id="window-heartlist">
+  <div class="label">window-heartlist</div>
+  <div class="win" style="width:140px;">
+    <div class="titlebar" style="background:linear-gradient(90deg,var(--teal),var(--teal-dark));"><span style="font-size:12px;">▶</span>
+      <div class="tb-icons"><div class="tb-icon">▁</div><div class="tb-icon">▢</div><div class="tb-icon close">✕</div></div>
+    </div>
+    <div style="background:#fff;padding:12px 10px;height: 50px;">
+      
+      <div style="padding-right:22px;" id="heartlist-rows"></div>
+    </div>
+  </div>
+</div>
+
+<div class="element" id="window-musicplayer">
+  <div class="label">window-musicplayer</div>
+  <div class="win" style="width:140px;">
+    <div class="titlebar" style="background:linear-gradient(90deg,var(--yellow),var(--yellow-dark));"><span>✦</span>
+      <div class="tb-icons"><div class="tb-icon">▁</div><div class="tb-icon">▢</div><div class="tb-icon close">✕</div></div>
+    </div>
+    <div id="visualizer" style="background:linear-gradient(#ffd6ea,#ffc2e0);height:35px;display:flex;align-items:flex-end;gap:3px;padding:2px;"></div>
+  </div>
+</div>
+
+<!-- ===== TITLEBAR-ONLY BARS ===== -->
+<div class="element" id="titlebar-pink">
+  <div class="label">titlebar-pink (standalone)</div>
+  <div class="win" style="width:140px;">
+    <div class="titlebar" style="background:linear-gradient(90deg,var(--pink),var(--pink-dark));"><span></span>
+      <div class="tb-icons"><div class="tb-icon">▁</div><div class="tb-icon">▢</div><div class="tb-icon close">✕</div></div>
+    </div>
+  </div>
+</div>
+<div class="element" id="titlebar-blue">
+  <div class="label">titlebar-blue (standalone)</div>
+  <div class="win" style="width:340px;">
+    <div class="titlebar" style="background:linear-gradient(90deg,var(--teal),var(--teal-dark));"><span style="font-size:12px;">▶</span>
+      <div class="tb-icons"><div class="tb-icon">▁</div><div class="tb-icon">▢</div><div class="tb-icon close">✕</div></div>
+    </div>
+  </div>
+</div>
+<div class="element" id="titlebar-yellow">
+  <div class="label">titlebar-yellow (standalone)</div>
+  <div class="win" style="width:340px;">
+    <div class="titlebar" style="background:linear-gradient(90deg,var(--yellow),var(--yellow-dark));"><span>✦</span>
+      <div class="tb-icons"><div class="tb-icon">▁</div><div class="tb-icon">▢</div><div class="tb-icon close">✕</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== WINDOW CONTROL ICONS ===== -->
+<div class="element" id="wc-min"><div class="label">wc-min</div><div class="sq-btn big">▁</div></div>
+<div class="element" id="wc-max"><div class="label">wc-max</div><div class="sq-btn big">▢</div></div>
+<div class="element" id="wc-close"><div class="label">wc-close</div><div class="sq-btn">✕</div></div>
+<div class="element" id="wc-play-blue"><div class="label">wc-play-blue</div><div class="sq-btn big" style="background:var(--teal);">▶</div></div>
+<div class="element" id="wc-pause-pink"><div class="label">wc-pause-pink</div><div class="sq-btn big" style="background:var(--pink);">❚❚</div></div>
+<div class="element" id="wc-stop-blue"><div class="label">wc-stop-blue</div><div class="sq-btn big" style="background:var(--teal);">■</div></div>
+<div class="element" id="wc-pause-yellow"><div class="label">wc-pause-yellow</div><div class="sq-btn big" style="background:var(--yellow);">❚❚</div></div>
+
+<!-- ===== MEDIA CONTROL ROW ===== -->
+<div class="element" id="btn-rewind-full"><div class="label">btn-rewind-full</div><div class="sq-btn big">◀◀</div></div>
+<div class="element" id="btn-back"><div class="label">btn-back</div><div class="sq-btn big">◀</div></div>
+<div class="element" id="btn-play"><div class="label">btn-play</div><div class="sq-btn big">▶</div></div>
+<div class="element" id="btn-pause"><div class="label">btn-pause</div><div class="sq-btn big">❚❚</div></div>
+<div class="element" id="btn-stop"><div class="label">btn-stop</div><div class="sq-btn big">■</div></div>
+<div class="element" id="btn-forward"><div class="label">btn-forward</div><div class="sq-btn big">▶▶</div></div>
+<div class="element" id="btn-forward-full"><div class="label">btn-forward-full</div><div class="sq-btn big">▶▶▶</div></div>
+
+<!-- ===== SPARKLES / STARS ===== -->
+<div class="element" id="sparkle-yellow">
+  <div class="label">sparkle-yellow</div>
+  <svg width="36" height="36" viewBox="0 0 36 36"><path d="M18 1 C18.6 12 21 15 35 18 C21 21 18.6 24 18 35 C17.4 24 15 21 1 18 C15 15 17.4 12 18 1 Z" fill="var(--yellow)" stroke="var(--black)" stroke-width="2.2" stroke-linejoin="round"/></svg>
+</div>
+<div class="element" id="sparkle-white-thin">
+  <div class="label">sparkle-white-thin</div>
+  <svg width="36" height="36" viewBox="0 0 36 36"><path d="M18 3 C18.5 13 20.5 15 33 18 C20.5 21 18.5 23 18 33 C17.5 23 15.5 21 3 18 C15.5 15 17.5 13 18 3 Z" fill="#fff" stroke="var(--black)" stroke-width="2.2" stroke-linejoin="round"/></svg>
+</div>
+<div class="element" id="sparkle-small-1">
+  <div class="label">sparkle-small-1</div>
+  <svg width="26" height="26" viewBox="0 0 26 26"><path d="M13 2 C13.4 9 15 11 24 13 C15 15 13.4 17 13 24 C12.6 17 11 15 2 13 C11 11 12.6 9 13 2 Z" fill="#fff" stroke="var(--black)" stroke-width="2" stroke-linejoin="round"/></svg>
+</div>
+<div class="element" id="sparkle-small-2">
+  <div class="label">sparkle-small-2</div>
+  <svg width="26" height="26" viewBox="0 0 26 26"><path d="M13 2 C13.4 9 15 11 24 13 C15 15 13.4 17 13 24 C12.6 17 11 15 2 13 C11 11 12.6 9 13 2 Z" fill="none" stroke="var(--black)" stroke-width="2" stroke-linejoin="round"/></svg>
+</div>
+<div class="element" id="burst-black">
+  <div class="label">burst-black</div>
+  <svg width="50" height="50" viewBox="0 0 50 50">
+    <g fill="var(--black)"><ellipse cx="25" cy="25" rx="15" ry="12"/>
+    <g stroke="var(--black)" stroke-width="3"><line x1="25" y1="1" x2="25" y2="49"/><line x1="1" y1="25" x2="49" y2="25"/><line x1="8" y1="8" x2="42" y2="42"/><line x1="42" y1="8" x2="8" y2="42"/></g></g>
+  </svg>
+</div>
+<div class="element" id="burst-pink">
+  <div class="label">burst-pink</div>
+  <svg width="50" height="50" viewBox="0 0 50 50">
+    <g fill="var(--pink)" stroke="var(--black)" stroke-width="2">
+      <path d="M25 3 C29 12 24 16 25 25 C26 16 21 12 25 3 Z"/>
+      <path d="M25 47 C29 38 24 34 25 25 C26 34 21 38 25 47 Z"/>
+      <path d="M3 25 C12 21 16 26 25 25 C16 24 12 29 3 25 Z"/>
+      <path d="M47 25 C38 21 34 26 25 25 C34 24 38 29 47 25 Z"/>
+      <path d="M9 9 C15 15 15 20 25 25 C20 15 15 15 9 9 Z"/>
+      <path d="M41 9 C35 15 35 20 25 25 C30 15 35 15 41 9 Z"/>
+      <path d="M9 41 C15 35 15 30 25 25 C20 35 15 35 9 41 Z"/>
+      <path d="M41 41 C35 35 35 30 25 25 C30 35 35 35 41 41 Z"/>
+    </g>
+  </svg>
+</div>
+<div class="element" id="burst-pink-outline">
+  <div class="label">burst-pink-outline</div>
+  <svg width="50" height="50" viewBox="0 0 50 50">
+    <g fill="none" stroke="var(--pink)" stroke-width="2.5">
+      <path d="M25 3 C29 12 24 16 25 25 C26 16 21 12 25 3 Z"/>
+      <path d="M25 47 C29 38 24 34 25 25 C26 34 21 38 25 47 Z"/>
+      <path d="M3 25 C12 21 16 26 25 25 C16 24 12 29 3 25 Z"/>
+      <path d="M47 25 C38 21 34 26 25 25 C34 24 38 29 47 25 Z"/>
+    </g>
+  </svg>
+</div>
+
+<!-- ===== HEARTS ===== -->
+<div class="element" id="heart-pink">
+  <div class="label">heart-pink</div>
+  <svg width="50" height="46" viewBox="0 0 60 54"><path d="M30 50 L6 28 C-2 18 6 4 20 6 C26 7 30 12 30 16 C30 12 34 7 40 6 C54 4 62 18 54 28 Z" fill="var(--pink)" stroke="var(--black)" stroke-width="3" stroke-linejoin="round"/></svg>
+</div>
+<div class="element" id="heart-blue">
+  <div class="label">heart-blue</div>
+  <svg width="50" height="46" viewBox="0 0 60 54"><path d="M30 50 L6 28 C-2 18 6 4 20 6 C26 7 30 12 30 16 C30 12 34 7 40 6 C54 4 62 18 54 28 Z" fill="var(--teal)" stroke="var(--black)" stroke-width="3" stroke-linejoin="round"/></svg>
+</div>
+
+<!-- ===== FILE/MAIL ICONS ===== -->
+<div class="element" id="icon-envelope">
+  <div class="label">icon-envelope</div>
+  <svg width="60" height="50" viewBox="0 0 60 50">
+    <rect x="2" y="10" width="56" height="38" rx="4" fill="#fff" stroke="var(--black)" stroke-width="3"/>
+    <path d="M6 12 L30 32 L54 12" fill="none" stroke="var(--black)" stroke-width="3"/>
+    <path d="M14 4 L46 4 L46 22 L14 22 Z" fill="#fff" stroke="var(--black)" stroke-width="3"/>
+  </svg>
+</div>
+<div class="element" id="icon-folder-pink">
+  <div class="label">icon-folder-pink</div>
+  <svg width="60" height="48" viewBox="0 0 60 48">
+    <path d="M2 8 C2 5 4 3 7 3 L24 3 L28 9 L53 9 C56 9 58 11 58 14 L58 42 C58 45 56 47 53 47 L7 47 C4 47 2 45 2 42 Z" fill="var(--pink)" stroke="var(--black)" stroke-width="3"/>
+  </svg>
+</div>
+<div class="element" id="icon-folder-blue">
+  <div class="label">icon-folder-blue</div>
+  <svg width="60" height="48" viewBox="0 0 60 48">
+    <path d="M2 8 C2 5 4 3 7 3 L24 3 L28 9 L53 9 C56 9 58 11 58 14 L58 42 C58 45 56 47 53 47 L7 47 C4 47 2 45 2 42 Z" fill="var(--teal)" stroke="var(--black)" stroke-width="3"/>
+  </svg>
+</div>
+<div class="element" id="icon-document-1">
+  <div class="label">icon-document-1</div>
+  <svg width="46" height="56" viewBox="0 0 46 56">
+    <path d="M4 2 L30 2 L42 14 L42 54 L4 54 Z" fill="#fff" stroke="var(--black)" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M30 2 L30 14 L42 14 Z" fill="#fff" stroke="var(--black)" stroke-width="2.5"/>
+    <line x1="10" y1="26" x2="34" y2="26" stroke="var(--black)" stroke-width="2"/>
+    <line x1="10" y1="34" x2="34" y2="34" stroke="var(--black)" stroke-width="2"/>
+    <line x1="10" y1="42" x2="26" y2="42" stroke="var(--black)" stroke-width="2"/>
+  </svg>
+</div>
+<div class="element" id="icon-document-2">
+  <div class="label">icon-document-2</div>
+  <svg width="46" height="56" viewBox="0 0 46 56">
+    <path d="M4 2 L30 2 L42 14 L42 54 L4 54 Z" fill="#fff" stroke="var(--black)" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M30 2 L30 14 L42 14 Z" fill="#fff" stroke="var(--black)" stroke-width="2.5"/>
+  </svg>
+</div>
+
+<!-- ===== BUTTONS / PILLS / BARS ===== -->
+<div class="element" id="search-bar"><div class="label">search-bar</div><div class="rect" style="width:280px;background:#fff;box-shadow:3px 3px 0 var(--teal);"></div></div>
+<div class="element" id="btn-yellow-rect"><div class="label">btn-yellow-rect</div><div class="rect" style="width:280px;background:var(--teal);"></div></div>
+<div class="element" id="pill-pink"><div class="label">pill-pink</div><div class="pill" style="width:170px;background:var(--pink);"></div></div>
+<div class="element" id="pill-blue-small"><div class="label">pill-blue-small</div><div class="pill" style="width:80px;background:var(--teal);"></div></div>
+<div class="element" id="pill-blue-long"><div class="label">pill-blue-long</div><div class="pill" style="width:170px;background:var(--teal);"></div></div>
+<div class="element" id="pill-dashed"><div class="label">pill-dashed</div><div class="pill" style="width:170px;background:#fff;border-style:dashed;"></div></div>
+
+<!-- ===== SPEECH BUBBLES ===== -->
+<div class="element" id="bubble-pink"><div class="label">bubble-pink</div><div class="bubble" style="background:var(--pink);"></div></div>
+<div class="element" id="bubble-yellow"><div class="label">bubble-yellow</div><div class="bubble" style="background:var(--yellow);"></div></div>
+
+<!-- ===== SLIDERS / PROGRESS ===== -->
+<div class="element" id="slider-blue">
+  <div class="label">slider-blue</div>
+  <div class="track" style="width:400px;"><div class="fill" style="width:80%;background:var(--teal);"></div><div class="handle" style="left:78%;background:var(--pink);"></div></div>
+</div>
+<div class="element" id="progress-pink">
+  <div class="label">progress-pink</div>
+  <div class="track" style="width:400px;"><div class="fill" style="width:65%;background:var(--pink);"></div></div>
+</div>
+
+<!-- ===== VERTICAL SCROLLBARS ===== -->
+<div class="element" id="vscroll-outline">
+  <div class="label">vscroll-outline</div>
+  <div class="vtrack"><div style="position:absolute;top:2px;left:50%;transform:translateX(-50%);font-size:10px;">▲</div><div style="position:absolute;bottom:2px;left:50%;transform:translateX(-50%);font-size:10px;">▼</div></div>
+</div>
+<div class="element" id="vscroll-pink"><div class="label">vscroll-pink</div><div class="vtrack"><div class="vfill" style="height:70%;background:var(--pink);"></div></div></div>
+<div class="element" id="vscroll-blue"><div class="label">vscroll-blue</div><div class="vtrack"><div class="vfill" style="height:70%;background:var(--teal);"></div></div></div>
+<div class="element" id="vscroll-yellow"><div class="label">vscroll-yellow</div><div class="vtrack"><div class="vfill" style="height:70%;background:var(--yellow);"></div></div></div>
+
+<!-- ===== SMALL NAV/ARROW BUTTONS ===== -->
+<div class="element" id="nav-up-pink"><div class="label">nav-up-pink</div><div class="sq-btn" style="background:var(--pink);">▲</div></div>
+<div class="element" id="nav-up-yellow"><div class="label">nav-up-yellow</div><div class="sq-btn" style="background:var(--yellow);">▲</div></div>
+<div class="element" id="nav-left-pink"><div class="label">nav-left-pink</div><div class="sq-btn" style="background:var(--pink);">◀</div></div>
+<div class="element" id="nav-down-blue"><div class="label">nav-down-blue</div><div class="sq-btn" style="background:var(--teal);">▼</div></div>
+<div class="element" id="nav-right"><div class="label">nav-right</div><div class="sq-btn">▶</div></div>
+<div class="element" id="nav-left"><div class="label">nav-left</div><div class="sq-btn">◀</div></div>
+<div class="element" id="nav-left-blue"><div class="label">nav-left-blue</div><div class="sq-btn" style="background:var(--teal);">◀</div></div>
+<div class="element" id="nav-dots"><div class="label">nav-dots (vertical)</div><div class="sq-btn">⋮</div></div>
+
+<!-- ===== RADIO DOTS ===== -->
+<div class="element" id="dot-pink"><div class="label">dot-pink</div><div style="width:34px;height:34px;border-radius:50%;background:var(--pink);border:2.5px solid var(--black);"></div></div>
+<div class="element" id="dot-blue"><div class="label">dot-blue</div><div style="width:34px;height:34px;border-radius:50%;background:var(--teal);border:2.5px solid var(--black);"></div></div>
+<div class="element" id="dot-yellow"><div class="label">dot-yellow</div><div style="width:34px;height:34px;border-radius:50%;background:var(--yellow);border:2.5px solid var(--black);"></div></div>
+<div class="element" id="dot-white"><div class="label">dot-white</div><div style="width:34px;height:34px;border-radius:50%;background:#fff;border:2.5px solid var(--black);"></div></div>
+
+<!-- ===== PATTERNS ===== -->
+<div class="element" id="pattern-x-row">
+  <div class="label">pattern-x-row</div>
+  <svg width="160" height="16" viewBox="0 0 160 16"><g stroke="var(--black)" stroke-width="2" stroke-linecap="round">
+    <g transform="translate(0,0)"><line x1="0" y1="0" x2="12" y2="12"/><line x1="12" y1="0" x2="0" y2="12"/></g>
+    <g transform="translate(25,0)"><line x1="0" y1="0" x2="12" y2="12"/><line x1="12" y1="0" x2="0" y2="12"/></g>
+    <g transform="translate(50,0)"><line x1="0" y1="0" x2="12" y2="12"/><line x1="12" y1="0" x2="0" y2="12"/></g>
+    <g transform="translate(75,0)"><line x1="0" y1="0" x2="12" y2="12"/><line x1="12" y1="0" x2="0" y2="12"/></g>
+    <g transform="translate(100,0)"><line x1="0" y1="0" x2="12" y2="12"/><line x1="12" y1="0" x2="0" y2="12"/></g>
+    <g transform="translate(125,0)"><line x1="0" y1="0" x2="12" y2="12"/><line x1="12" y1="0" x2="0" y2="12"/></g>
+  </g></svg>
+</div>
+<div class="element" id="pattern-plus-row">
+  <div class="label">pattern-plus-row</div>
+  <svg width="180" height="16" viewBox="0 0 180 16"><g stroke="var(--black)" stroke-width="2" stroke-linecap="round">
+    <g transform="translate(0,0)"><line x1="6" y1="0" x2="6" y2="12"/><line x1="0" y1="6" x2="12" y2="6"/></g>
+    <g transform="translate(22,0)"><line x1="6" y1="0" x2="6" y2="12"/><line x1="0" y1="6" x2="12" y2="6"/></g>
+    <g transform="translate(44,0)"><line x1="6" y1="0" x2="6" y2="12"/><line x1="0" y1="6" x2="12" y2="6"/></g>
+    <g transform="translate(66,0)"><line x1="6" y1="0" x2="6" y2="12"/><line x1="0" y1="6" x2="12" y2="6"/></g>
+    <g transform="translate(88,0)"><line x1="6" y1="0" x2="6" y2="12"/><line x1="0" y1="6" x2="12" y2="6"/></g>
+    <g transform="translate(110,0)"><line x1="6" y1="0" x2="6" y2="12"/><line x1="0" y1="6" x2="12" y2="6"/></g>
+    <g transform="translate(132,0)"><line x1="6" y1="0" x2="6" y2="12"/><line x1="0" y1="6" x2="12" y2="6"/></g>
+  </g></svg>
+</div>
+<div class="element" id="pattern-diagonal-stripes">
+  <div class="label">pattern-diagonal-stripes</div>
+  <svg width="180" height="18" viewBox="0 0 180 18"><g stroke="var(--black)" stroke-width="3">
+    <line x1="0" y1="18" x2="18" y2="0"/><line x1="18" y1="18" x2="36" y2="0"/><line x1="36" y1="18" x2="54" y2="0"/>
+    <line x1="54" y1="18" x2="72" y2="0"/><line x1="72" y1="18" x2="90" y2="0"/><line x1="90" y1="18" x2="108" y2="0"/>
+    <line x1="108" y1="18" x2="126" y2="0"/><line x1="126" y1="18" x2="144" y2="0"/><line x1="144" y1="18" x2="162" y2="0"/>
+    <line x1="162" y1="18" x2="180" y2="0"/>
+  </g></svg>
+</div>
+<div class="element" id="pattern-checker">
+  <div class="label">pattern-checker</div>
+  <svg width="180" height="18" viewBox="0 0 180 18"><g fill="var(--black)">
+    <rect x="0" y="0" width="9" height="9"/><rect x="9" y="9" width="9" height="9"/>
+    <rect x="18" y="0" width="9" height="9"/><rect x="27" y="9" width="9" height="9"/>
+    <rect x="36" y="0" width="9" height="9"/><rect x="45" y="9" width="9" height="9"/>
+    <rect x="54" y="0" width="9" height="9"/><rect x="63" y="9" width="9" height="9"/>
+    <rect x="72" y="0" width="9" height="9"/><rect x="81" y="9" width="9" height="9"/>
+    <rect x="90" y="0" width="9" height="9"/><rect x="99" y="9" width="9" height="9"/>
+    <rect x="108" y="0" width="9" height="9"/><rect x="117" y="9" width="9" height="9"/>
+    <rect x="126" y="0" width="9" height="9"/><rect x="135" y="9" width="9" height="9"/>
+    <rect x="144" y="0" width="9" height="9"/><rect x="153" y="9" width="9" height="9"/>
+    <rect x="162" y="0" width="9" height="9"/><rect x="171" y="9" width="9" height="9"/>
+  </g></svg>
+</div>
+<div class="element" id="pattern-x-scatter">
+  <div class="label">pattern-x-scatter</div>
+  <svg width="100" height="16" viewBox="0 0 100 16"><g stroke="var(--black)" stroke-width="2" stroke-linecap="round">
+    <g transform="translate(0,0)"><line x1="0" y1="0" x2="12" y2="12"/><line x1="12" y1="0" x2="0" y2="12"/></g>
+    <g transform="translate(20,0)"><line x1="0" y1="0" x2="12" y2="12"/><line x1="12" y1="0" x2="0" y2="12"/></g>
+    <g transform="translate(40,0)"><line x1="0" y1="0" x2="12" y2="12"/><line x1="12" y1="0" x2="0" y2="12"/></g>
+    <g transform="translate(60,0)"><line x1="0" y1="0" x2="12" y2="12"/><line x1="12" y1="0" x2="0" y2="12"/></g>
+    <g transform="translate(80,0)"><line x1="0" y1="0" x2="12" y2="12"/><line x1="12" y1="0" x2="0" y2="12"/></g>
+  </g></svg>
+</div>
+
+<!-- ===== BACKGROUND TILES ===== -->
+<div class="element" id="bg-grid-tile">
+  <div class="label">bg-grid-tile (seamless, dùng lặp lại làm nền)</div>
+  <svg width="200" height="200" viewBox="0 0 200 200">
+    <rect width="200" height="200" fill="#c9a8f5"/>
+    <g stroke="#ffffff" stroke-opacity="0.35" stroke-width="1.5">
+      <line x1="0" y1="0" x2="0" y2="200"/><line x1="40" y1="0" x2="40" y2="200"/>
+      <line x1="80" y1="0" x2="80" y2="200"/><line x1="120" y1="0" x2="120" y2="200"/>
+      <line x1="160" y1="0" x2="160" y2="200"/><line x1="200" y1="0" x2="200" y2="200"/>
+      <line x1="0" y1="0" x2="200" y2="0"/><line x1="0" y1="40" x2="200" y2="40"/>
+      <line x1="0" y1="80" x2="200" y2="80"/><line x1="0" y1="120" x2="200" y2="120"/>
+      <line x1="0" y1="160" x2="200" y2="160"/><line x1="0" y1="200" x2="200" y2="200"/>
+    </g>
+  </svg>
+</div>
+
+<div class="element" id="bg-grid-large">
+  <div class="label">bg-grid-large (1600x1200, nền hoàn chỉnh full-size)</div>
+  <svg width="320" height="240" viewBox="0 0 320 240">
+    <defs>
+      <pattern id="gridPattern" width="10" height="10" patternUnits="userSpaceOnUse">
+        <path d="M40 0 H0 V40" fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="1.5"/>
+      </pattern>
+    </defs>
+    <rect width="1600" height="1200" fill="#c9a8f5"/>
+    <rect width="1600" height="1200" fill="url(#gridPattern)"/>
+  </svg>
+</div>
+
+<div class="element" id="bg-grid-decorated">
+  <div class="label">bg-grid-decorated (lưới + sparkle/heart/x rải sẵn, tile 400x400)</div>
+  <svg width="320" height="240" viewBox="0 0 320 240">
+    <defs>
+      <pattern id="gridPattern2" width="10" height="10" patternUnits="userSpaceOnUse">
+        <path d="M40 0 H0 V40" fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="1.5"/>
+      </pattern>
+    </defs>
+    <rect width="400" height="400" fill="#c9a8f5"/>
+    <rect width="400" height="400" fill="url(#gridPattern2)"/>
+
+    <!-- sparkles -->
+    <g transform="translate(40,50)"><path d="M10 0 C10.4 6 12 8 20 10 C12 12 10.4 14 10 20 C9.6 14 8 12 0 10 C8 8 9.6 6 10 0 Z" fill="#fff" stroke="#1a1a1a" stroke-width="1.5"/></g>
+    <g transform="translate(300,90)"><path d="M14 0 C14.6 8 17 11 28 14 C17 17 14.6 20 14 28 C13.4 20 11 17 0 14 C11 11 13.4 8 14 0 Z" fill="#fff3a0" stroke="#1a1a1a" stroke-width="1.5"/></g>
+    <g transform="translate(150,300)"><path d="M10 0 C10.4 6 12 8 20 10 C12 12 10.4 14 10 20 C9.6 14 8 12 0 10 C8 8 9.6 6 10 0 Z" fill="#fff" stroke="#1a1a1a" stroke-width="1.5"/></g>
+
+    <!-- heart -->
+    <g transform="translate(230,240) scale(0.4)">
+      <path d="M30 50 L6 28 C-2 18 6 4 20 6 C26 7 30 12 30 16 C30 12 34 7 40 6 C54 4 62 18 54 28 Z" fill="#ffb6d5" stroke="#1a1a1a" stroke-width="4" stroke-linejoin="round"/>
+    </g>
+
+    <!-- x marks -->
+    <g stroke="#1a1a1a" stroke-width="2" stroke-linecap="round">
+      <g transform="translate(60,180)"><line x1="0" y1="0" x2="10" y2="10"/><line x1="10" y1="0" x2="0" y2="10"/></g>
+      <g transform="translate(78,180)"><line x1="0" y1="0" x2="10" y2="10"/><line x1="10" y1="0" x2="0" y2="10"/></g>
+      <g transform="translate(96,180)"><line x1="0" y1="0" x2="10" y2="10"/><line x1="10" y1="0" x2="0" y2="10"/></g>
+    </g>
+
+    <!-- plus marks -->
+    <g stroke="#1a1a1a" stroke-width="2" stroke-linecap="round">
+      <g transform="translate(320,320)"><line x1="5" y1="0" x2="5" y2="10"/><line x1="0" y1="5" x2="10" y2="5"/></g>
+      <g transform="translate(335,320)"><line x1="5" y1="0" x2="5" y2="10"/><line x1="0" y1="5" x2="10" y2="5"/></g>
+    </g>
+  </svg>
+</div>
+
+<script>
+  const heartSVG = `<svg width="26" height="24" viewBox="0 0 60 54"><path d="M30 50 L6 28 C-2 18 6 4 20 6 C26 7 30 12 30 16 C30 12 34 7 40 6 C54 4 62 18 54 28 Z" fill="var(--pink)" stroke="#1a1a1a" stroke-width="4" stroke-linejoin="round"/></svg>`;
+
+  document.getElementById('heartlist-rows').innerHTML = rowsHTML;
+
+  const vis = document.getElementById('visualizer');
+
+</script>
+</body>
+</html>

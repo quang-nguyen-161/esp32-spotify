@@ -50,7 +50,7 @@ Adafruit_ST7789 *gfx = &tft; // required: defines the extern dashboard.cpp uses
 static String lastTrackId = "";
 static uint16_t artworkBuf[120 * 120]; // RGB565 buffer, 8192 bytes
 static unsigned long lastPollMs = 0;
-static const unsigned long POLL_INTERVAL_MS = 4000; // esp32-plan.md: 3-5s is reasonable
+static const unsigned long POLL_INTERVAL_MS = 2000; // esp32-plan.md: 3-5s is reasonable
 
 // ---------- Lyrics state ----------
 static Lyrics::LyricsData currentLyrics;

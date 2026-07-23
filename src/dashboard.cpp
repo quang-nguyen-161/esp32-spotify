@@ -377,36 +377,77 @@ void DashWindow::draw(uint16_t bgColor) {
 }
 
 // ---------------------------------------------------------------------
-// Layout constants (from the bitmap-based Lopaka export)
+// Layout constants (matched to draw16bitRGBBitmap())
 // ---------------------------------------------------------------------
+
+// Background
 static const int16_t BG_X = 0, BG_Y = 0, BG_W = 320, BG_H = 240;
-static const int16_t WIN_SKY_X = 3,   WIN_SKY_Y = 9,   WIN_SKY_W = 137, WIN_SKY_H = 156;
-static const int16_t WIN_HEARTLIST_X = 145, WIN_HEARTLIST_Y = 6,  WIN_HEARTLIST_W = 155, WIN_HEARTLIST_H = 105;
-static const int16_t WIN_PLAYER_X = 145, WIN_PLAYER_Y = 115, WIN_PLAYER_W = 155, WIN_PLAYER_H = 77; // playlist plate
 
-// Song-name / artist bitmap plates (cover-art panel)
-static const int16_t SONG_PLATE_X = 3,  SONG_PLATE_Y = 169, SONG_PLATE_W = 138, SONG_PLATE_H = 31;
-static const int16_t ARTIST_PLATE_X = 24, ARTIST_PLATE_Y = 202, ARTIST_PLATE_W = 94, ARTIST_PLATE_H = 23;
-static const int16_t SONG_TEXT_X = 15, SONG_TEXT_Y = 187;
-static const int16_t ARTIST_TEXT_X = 37, ARTIST_TEXT_Y = 216;
+// Cover art
+static const int16_t WIN_SKY_X = 13, WIN_SKY_Y = 13;
+static const int16_t WIN_SKY_W = 137, WIN_SKY_H = 156;
 
-// "Next:" label + next-song-name, floating over the playlist plate
-static const int16_t NEXT_LABEL_X = 156, NEXT_LABEL_Y = 148;
-static const int16_t NEXT_SONG_X = 155, NEXT_SONG_Y = 170;
+static const int16_t ARTWORK_X = 20, ARTWORK_Y = 35;
+static const int16_t ARTWORK_W = 120, ARTWORK_H = 120;
+// Lyrics
+static const int16_t WIN_HEARTLIST_X = 155, WIN_HEARTLIST_Y = 10;
+static const int16_t WIN_HEARTLIST_W = 155, WIN_HEARTLIST_H = 105;
+
+// Playlist
+static const int16_t WIN_PLAYER_X = 155, WIN_PLAYER_Y = 119;
+static const int16_t WIN_PLAYER_W = 155, WIN_PLAYER_H = 77;
+
+// Song / Artist plates
+static const int16_t SONG_PLATE_X = 13, SONG_PLATE_Y = 173;
+static const int16_t SONG_PLATE_W = 138, SONG_PLATE_H = 31;
+
+static const int16_t ARTIST_PLATE_X = 34, ARTIST_PLATE_Y = 206;
+static const int16_t ARTIST_PLATE_W = 94, ARTIST_PLATE_H = 23;
+
+// Text positions (adjust if needed depending on font)
+static const int16_t SONG_TEXT_X = 25, SONG_TEXT_Y = 191;
+static const int16_t ARTIST_TEXT_X = 45, ARTIST_TEXT_Y = 220;
+
+// "Next:" label + next-song
+static const int16_t NEXT_LABEL_X = 166, NEXT_LABEL_Y = 152;
+static const int16_t NEXT_SONG_X  = 160, NEXT_SONG_Y  = 171;
 
 // Transport buttons
-static const int16_t BTN_REWIND_X = 185, BTN_REWIND_Y = 216, BTN_REWIND_W = 16, BTN_REWIND_H = 13;
-static const int16_t BTN_FORWARD_X = 251, BTN_FORWARD_Y = 215, BTN_FORWARD_W = 16, BTN_FORWARD_H = 13;
-static const int16_t BTN_PLAYPAUSE_X = 212, BTN_Y = 211, BTN_W = 25, BTN_H = 21;
+static const int16_t BTN_REWIND_X  = 195;
+static const int16_t BTN_REWIND_Y  = 220;
+static const int16_t BTN_REWIND_W  = 16;
+static const int16_t BTN_REWIND_H  = 13;
 
-// Progress bar: track + fill + thumb
-static const int16_t PROGRESS_X = 145, PROGRESS_Y = 195, PROGRESS_W = 153, PROGRESS_H = 13;
-static const int16_t PROGRESS_FILL_X = 148, PROGRESS_FILL_Y = 198, PROGRESS_FILL_W = 90, PROGRESS_FILL_H = 6;
-static const int16_t PROGRESS_THUMB_Y = 193, PROGRESS_THUMB_W = 15, PROGRESS_THUMB_H = 15;
+static const int16_t BTN_FORWARD_X = 261;
+static const int16_t BTN_FORWARD_Y = 219;
+static const int16_t BTN_FORWARD_W = 16;
+static const int16_t BTN_FORWARD_H = 13;
 
+static const int16_t BTN_PLAYPAUSE_X = 222;
+static const int16_t BTN_Y           = 215;
+static const int16_t BTN_W           = 25;
+static const int16_t BTN_H           = 21;
+
+// Progress bar
+static const int16_t PROGRESS_X = 155;
+static const int16_t PROGRESS_Y = 199;
+static const int16_t PROGRESS_W = 153;
+static const int16_t PROGRESS_H = 13;
+
+// Fill bar (starts inside the frame)
+static const int16_t PROGRESS_FILL_X = 158;
+static const int16_t PROGRESS_FILL_Y = 202;
+static const int16_t PROGRESS_FILL_W = 90;
+static const int16_t PROGRESS_FILL_H = 6;
+
+// Thumb
+static const int16_t PROGRESS_THUMB_Y = 197;
+static const int16_t PROGRESS_THUMB_W = 15;
+static const int16_t PROGRESS_THUMB_H = 15;
+
+// Lyrics
 static const int16_t DASH_LYRICS_LINE_H = 18;
 static const int16_t DASH_LYRICS_LINE_W = 120;
-
 // ---------------------------------------------------------------------
 // DashArtwork
 // chrome = WIN_SKY bitmap. songName sits over the yellow-button bitmap

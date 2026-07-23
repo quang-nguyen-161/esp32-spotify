@@ -1,32 +1,58 @@
-#pragma once
+#ifndef WIFI_PORTAL_H
+#define WIFI_PORTAL_H
+
 #include <Arduino.h>
 
-// ============================================================
-// WifiPortal
-// - Saves SSID/password to NVS (Preferences library, namespace "wifi")
-// - If no credentials are stored yet (or connection fails), automatically
-//   starts an AP + captive portal so the user can enter WiFi credentials
-//   from a phone/laptop.
-// - The captive portal auto-redirects to the config page on most devices
-//   (Android/iOS/Windows) because the DNS server returns the ESP32's IP
-//   for EVERY domain.
-// ============================================================
+/*
+  Module: wifi_portal
+  Purpose: Captive portal that lets the user enter:
+    - WiFi SSID / Password
+    - Vercel endpoint base URL (e.g. https://your-app.vercel.app)
+    - Spotify User ID (account identifier on the Vercel backend, e.g. "xuan123")
+    - ESP32 API key (used to authenticate with Vercel via the x-api-key header)
+
+  Spotify Client ID/Secret/Refresh Token no longer live on the ESP32 -
+  the Vercel proxy handles the entire OAuth flow; the ESP32 just calls
+  a single simple HTTPS endpoint. (See plan.md: Spotify -> Vercel -> ESP32)
+
+  Usage in main.cpp:
+
+    #include "wifi_portal.h"
+
+    void setup() {
+      Serial.begin(115200);
+      bool connected = WifiPortal::begin();
+      if (connected) {
+        // ... main code, use WifiPortal::getVercelBaseUrl() / getApiKey() ...
+      }
+    }
+
+    void loop() {
+      WifiPortal::loop(); // REQUIRED - handles the captive portal while in AP mode
+    }
+*/
+
 namespace WifiPortal {
 
-  static const char* AP_SSID_DEFAULT = "ESP32-Setup";
-  static const char* AP_PASS_DEFAULT = ""; // "" = open AP, no password required
+  // Call in setup(). Returns true if WiFi connected successfully.
+  // Returns false if currently in captive portal mode (must call loop() continuously).
+  bool begin();
 
-  // Tries to connect to WiFi using credentials saved in NVS.
-  // If there are none, or the connection fails within connectTimeoutMs,
-  // automatically starts the captive portal (blocks until the user submits
-  // credentials and the ESP32 connects successfully, or until
-  // portalTimeoutMs elapses).
-  bool connectOrStartPortal(unsigned long connectTimeoutMs = 15000,
-                             unsigned long portalTimeoutMs = 0 /* 0 = no limit */,
-                             const char* apSsid = AP_SSID_DEFAULT,
-                             const char* apPass = AP_PASS_DEFAULT);
+  // Call in loop() - handles DNS + HTTP requests while in AP mode.
+  void loop();
 
-  bool hasCredentials();
-  void clearCredentials();
-  String getSavedSsid();
-}
+  // Whether currently in AP/captive portal mode
+  bool isInPortalMode();
+
+  // Clear all saved config, used when the user wants to reconfigure from scratch
+  void resetConfig();
+
+  // Getters for the saved config
+  String getWifiSsid();
+  String getVercelBaseUrl(); // e.g. "https://your-app.vercel.app" (no trailing slash)
+  String getUserId();        // Spotify account identifier on the backend, e.g. "xuan123"
+  String getApiKey();        // value sent in the x-api-key header
+
+} // namespace WifiPortal
+
+#endif // WIFI_PORTAL_H

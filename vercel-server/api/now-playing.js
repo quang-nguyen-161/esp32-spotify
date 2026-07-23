@@ -1,7 +1,7 @@
 import { kv } from '@vercel/kv';
 import sharp from 'sharp';
 
-const ART_SIZE = 64; // change to match ESP32 screen size, e.g. 64x64
+const ART_SIZE = 120; // change to match ESP32 screen size, e.g. 120x120
 
 function rgb888ToRgb565Buffer(rgbBuffer, width, height) {
   // rgbBuffer: raw RGB (3 bytes/pixel) from sharp

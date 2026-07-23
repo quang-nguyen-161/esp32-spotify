@@ -103,9 +103,13 @@ export default async function handler(req, res) {
     return res.json({ ok: true, action });
   }
 
-  // 404 usually means there is no active device
+  // 404 usually means there is no active device, but show Spotify's real error body to confirm
   if (spResp.status === 404) {
-    return res.status(404).json({ error: 'no active device found (open Spotify on a device first)' });
+    const detail = await spResp.text();
+    return res.status(404).json({
+      error: 'no active device found (open Spotify on a device first)',
+      spotify_detail: detail,
+    });
   }
 
   const detail = await spResp.text();

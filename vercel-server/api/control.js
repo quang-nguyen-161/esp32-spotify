@@ -25,13 +25,13 @@ async function getAccessToken(userId) {
 
 // map action -> { method, path, needsQuery }
 const ACTIONS = {
-  play: { method: 'PUT', path: '/me/player/play' },
-  pause: { method: 'PUT', path: '/me/player/pause' },
-  next: { method: 'POST', path: '/me/player/next' },
-  previous: { method: 'POST', path: '/me/player/previous' },
-  volume: { method: 'PUT', path: '/me/player/volume' }, // requires ?value=0-100
-  shuffle: { method: 'PUT', path: '/me/player/shuffle' }, // requires ?state=true|false
-  repeat: { method: 'PUT', path: '/me/player/repeat' }, // requires ?state=off|track|context
+  play: { method: 'PUT', path: '/v1/me/player/play' },
+  pause: { method: 'PUT', path: '/v1/me/player/pause' },
+  next: { method: 'POST', path: '/v1/me/player/next' },
+  previous: { method: 'POST', path: '/v1/me/player/previous' },
+  volume: { method: 'PUT', path: '/v1/me/player/volume' }, // requires ?value=0-100
+  shuffle: { method: 'PUT', path: '/v1/me/player/shuffle' }, // requires ?state=true|false
+  repeat: { method: 'PUT', path: '/v1/me/player/repeat' }, // requires ?state=off|track|context
 };
 
 // GET /api/control?user=<id>&action=<play|pause|next|previous|volume|shuffle|repeat>&value=...&state=...

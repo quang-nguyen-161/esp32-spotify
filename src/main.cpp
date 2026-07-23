@@ -68,6 +68,8 @@ void setup() {
   tft.setRotation(3);
   tft.fillScreen(ST77XX_BLACK);
 
+  dashboard_begin();
+  
   Serial.println("Display initialized.");
 
   // ---- Dashboard demo wiring ----
@@ -76,21 +78,10 @@ void setup() {
   dash_lyrics.setLyricsSource(songLyrics, sizeof(songLyrics) / sizeof(songLyrics[0]));
   dash_playback.setState(DASH_PLAYING);
   dash_playback.setProgress(0.4f);
-
   dashboard_draw();
+
 }
 
 void loop() {
-  dashboard_update(); // advances any active scroll animations
-
-  // Example: rotate the dashboard's whole color scheme by 60 degrees
-  // every 5s, so you can see the hue-rotation helper in action. Comment
-  // this out once you've picked your theme.
-  static unsigned long lastRotate = 0;
-  if (millis() - lastRotate > 5000) {
-    lastRotate = millis();
-    static int16_t hue = 0;
-    hue = (hue + 60) % 360;
-    dashboard_setHueRotation(hue); // redraws automatically
-  }
+  
 }

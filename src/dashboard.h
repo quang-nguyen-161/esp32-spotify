@@ -102,6 +102,7 @@ public:
   void draw();
 
 private:
+  bool _dirty; // add as a private member of DashText, alongside the other members
   int16_t _x, _y, _w, _h;
   uint8_t _textSize;
   uint16_t _color, _bgColor;
@@ -204,9 +205,11 @@ private:
 };
 
 // ---------------------------------------------------------------------
-// DashArtwork (main class): sky-preview window + song name + artist.
-// Chrome is the WIN_SKY bitmap; song name / artist sit below it, over
-// the search-bar and yellow-button bitmaps from the same asset set.
+// DashArtwork (main class): cover-art window + song name + artist.
+// Chrome is the cover-art bitmap; song name / artist are each their own
+// bitmap "plate" (image_song_name_pixels / image_artist_pixels) with
+// text drawn on top of the plate at a fixed offset -- not plain
+// DashText on a flat background like before.
 // ---------------------------------------------------------------------
 class DashArtwork : public DashElement {
 public:
@@ -218,16 +221,25 @@ public:
   void setFrameColor(uint16_t color) { _frameColor = color; }
   void setColors(uint16_t frameColor, uint16_t songColor, uint16_t artistColor);
 
+  // Configure the bitmap plates the song/artist text is overlaid on.
+  void setSongPlate(const uint16_t *bmp, int16_t x, int16_t y, int16_t w, int16_t h);
+  void setArtistPlate(const uint16_t *bmp, int16_t x, int16_t y, int16_t w, int16_t h);
+
   void draw(uint16_t bgColor);
   void update();
 
-  DashWindow chrome; // WIN_SKY bitmap chrome
+  DashWindow chrome; // cover-art bitmap chrome
   DashText songName;
   DashText artistName;
 
 private:
   int16_t _x, _y, _w, _h;
   uint16_t _frameColor;
+
+  const uint16_t *_songPlateBmp = nullptr;
+  int16_t _songPlateX = 0, _songPlateY = 0, _songPlateW = 0, _songPlateH = 0;
+  const uint16_t *_artistPlateBmp = nullptr;
+  int16_t _artistPlateX = 0, _artistPlateY = 0, _artistPlateW = 0, _artistPlateH = 0;
 };
 
 // ---------------------------------------------------------------------
@@ -235,8 +247,8 @@ private:
 // ---------------------------------------------------------------------
 class DashLyrics : public DashElement {
 public:
-  static const uint8_t LINE_COUNT = 5;
-  static const uint8_t ACTIVE_LINE_INDEX = 2; // 0-based -> "line 3"
+  static const uint8_t LINE_COUNT = 4; // new layout only shows 4 lyric lines
+  static const uint8_t ACTIVE_LINE_INDEX = 1; // 0-based -> "line 2" (keeps a line above/below on a 4-line window)
 
   DashLyrics(int16_t x, int16_t y);
 
@@ -280,8 +292,12 @@ private:
 };
 
 // ---------------------------------------------------------------------
-// DashPlayback (main class): equalizer window + prev/play-pause/next
-// buttons, now drawn from the full-color Lopaka button bitmaps.
+// DashPlayback (main class): playlist plate + prev/play-pause/next
+// buttons + progress bar (with draggable-looking thumb), all drawn
+// directly on the background -- there is no equalizer/player window
+// chrome bitmap in the new layout, so `chrome` now hosts the playlist
+// plate bitmap instead (visually the same slot the old WIN_PLAYER
+// chrome occupied).
 // ---------------------------------------------------------------------
 enum DashPlayState { DASH_PAUSED, DASH_PLAYING };
 
@@ -297,9 +313,13 @@ public:
   void setProgressColor(uint16_t color) { _progressColor = color; }
   void setIconsColor(uint16_t color); // only affects monochrome icon variants, if used
 
+  // Position/size of the progress-bar thumb bitmap; x is recomputed each
+  // draw() from the current progress, y/w/h stay fixed.
+  void setThumbBitmap(const uint16_t *bmp, int16_t y, int16_t w, int16_t h);
+
   void draw(uint16_t bgColor);
 
-  DashWindow chrome; // WIN_PLAYER (equalizer) bitmap chrome
+  DashWindow chrome; // playlist plate bitmap (occupies old WIN_PLAYER slot)
   DashIcon prev;
   DashIcon playPause;
   DashIcon next;
@@ -310,6 +330,9 @@ private:
   float _progress;
   DashPlayState _state;
   bool _iconsInitialized;
+
+  const uint16_t *_thumbBmp = nullptr;
+  int16_t _thumbY = 0, _thumbW = 0, _thumbH = 0;
 
   void initIconsIfNeeded();
 };
@@ -326,3 +349,10 @@ extern DashPlayback dash_playback;
 void dashboard_setColorScheme(uint16_t mainColor, bool redraw = true);
 void dashboard_update(void);
 void dashboard_draw(void);
+
+void dashboard_updateArtwork();
+void dashboard_updateLyrics();
+void dashboard_updatePlayback();
+void dashboard_begin();
+void dashboard_setBackgroundColor(uint16_t color, bool redraw = true);
+

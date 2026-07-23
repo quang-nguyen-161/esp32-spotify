@@ -12,7 +12,7 @@ function rgb888ToRgb565Buffer(rgbBuffer, width, height) {
     const g = rgbBuffer[i + 1];
     const b = rgbBuffer[i + 2];
     const val = ((r & 0xf8) << 8) | ((g & 0xfc) << 3) | (b >> 3);
-    out.writeUInt16BE(val, p);
+    out.writeUInt16LE(val, p);
   }
   return out;
 }

@@ -95,6 +95,11 @@ public:
   void setBgColor(uint16_t color);
   uint16_t bgColor() const { return _bgColor; }
 
+  // Custom Adafruit GFX font (e.g. &FreeMonoBoldOblique9pt7b). Pass
+  // nullptr to go back to the built-in default font.
+  void setFont(const GFXfont *font);
+  const GFXfont *font() const { return _font; }
+
   void setScrollSpeed(uint16_t pxPerStep, uint16_t stepIntervalMs);
   bool isScrolling() const { return _needsScroll; }
 
@@ -113,6 +118,7 @@ private:
   unsigned long _lastStepMs;
   uint16_t _stepIntervalMs, _pxPerStep;
   GFXcanvas16 *_canvas;
+  const GFXfont *_font = nullptr;
 
   void allocCanvas();
   void measure();
@@ -355,4 +361,3 @@ void dashboard_updateLyrics();
 void dashboard_updatePlayback();
 void dashboard_begin();
 void dashboard_setBackgroundColor(uint16_t color, bool redraw = true);
-

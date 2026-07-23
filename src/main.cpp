@@ -1,6 +1,5 @@
 /*
-  ESP32 + ST7789 TFT color test
-  Using Adafruit GFX + Adafruit ST7789 library (most popular combo for ST7789 on Arduino/PlatformIO)
+  ESP32 + ST7789 TFT — Spotify Now Playing dashboard
 
   Wiring (custom pinout):
     TFT_GND  -> GPIO 32  (driven LOW in software)
@@ -33,6 +32,7 @@
 #include "spotify_control.h"
 #include "lyrics.h"
 #include "text_utils.h"
+
 // ---- Pin definitions ----
 #define TFT_GND   32   // driven LOW
 #define TFT_VCC   33   // driven HIGH
@@ -44,25 +44,7 @@
 
 // Use hardware SPI (VSPI) with explicit pins
 Adafruit_ST7789 tft = Adafruit_ST7789(&SPI, TFT_CS, TFT_DC, TFT_RST);
-Adafruit_ST7789 *gfx = &tft;
-// Basic colors to cycle through
-struct ColorEntry {
-  const char *name;
-  uint16_t color;
-};
-
-ColorEntry colors[] = {
-  {"RED",     ST77XX_RED},
-  {"GREEN",   ST77XX_GREEN},
-  {"BLUE",    ST77XX_BLUE},
-  {"YELLOW",  ST77XX_YELLOW},
-  {"CYAN",    ST77XX_CYAN},
-  {"MAGENTA", ST77XX_MAGENTA},
-  {"WHITE",   ST77XX_WHITE},
-  {"BLACK",   ST77XX_BLACK},
-};
-
-const int numColors = sizeof(colors) / sizeof(colors[0]);
+Adafruit_ST7789 *gfx = &tft; // required: defines the extern dashboard.cpp uses
 
 // ---------- Now Playing state ----------
 static String lastTrackId = "";
@@ -74,6 +56,14 @@ static const unsigned long POLL_INTERVAL_MS = 4000; // esp32-plan.md: 3-5s is re
 static Lyrics::LyricsData currentLyrics;
 static int lastLyricLineIdx = -1;
 
+// Flat String buffer handed to dash_lyrics.setLyricsSource(), which only
+// stores a pointer + count (doesn't copy), so this needs to stay alive
+// for as long as the lyrics are on screen. Cap chosen generously; bump
+// if a track legitimately has more synced lines than this.
+#define MAX_LYRIC_LINES 200
+static String lyricTextsBuf[MAX_LYRIC_LINES];
+static uint16_t lyricTextsCount = 0;
+
 // ---------- Physical buttons (optional - change pins to match your wiring) ----------
 #define BTN_PLAY_PAUSE 4
 #define BTN_NEXT       16
@@ -84,23 +74,40 @@ static SpotifyControl::ButtonDebouncer btnNextDebouncer(300);
 static SpotifyControl::ButtonDebouncer btnPrevDebouncer(300);
 static bool s_isPlayingCache = false; // used to decide whether to send "play" or "pause"
 
-// ---------- Helper: display track info + artwork ----------
+// ---------- Helper: push fetched lyrics into the dashboard's lyric source ----------
+static void updateLyricsSource() {
+  lyricTextsCount = 0;
+  if (currentLyrics.found) {
+    size_t n = currentLyrics.lines.size();
+    if (n > MAX_LYRIC_LINES) n = MAX_LYRIC_LINES;
+    for (size_t i = 0; i < n; i++) {
+      lyricTextsBuf[i] = TextUtils::stripDiacriticsUtf8(currentLyrics.lines[i].text);
+    }
+    lyricTextsCount = (uint16_t)n;
+  }
+  dash_lyrics.setLyricsSource(lyricTextsBuf, lyricTextsCount);
+  lastLyricLineIdx = -1;
+}
+
+// ---------- Helper: display track info + artwork on the dashboard widgets ----------
 static void showNowPlaying(const NowPlaying::Track& t) {
   if (t.trackId != lastTrackId) {
-    // Set the background color based on dominant_color before drawing the artwork
-    // (so we still get a nice background even if the artwork fetch fails)
+    // Set the dashboard background color based on dominant_color before
+    // drawing anything else (so we still get a nice background even if
+    // the artwork fetch fails). redraw=false: we do one full dashboard_draw()
+    // below once song/artist/artwork/lyrics are all updated.
     if (t.dominantColor.length() > 0) {
       uint16_t bgColor = NowPlaying::hexToRgb565(t.dominantColor);
-      tft.fillScreen(bgColor);
+      dashboard_setBackgroundColor(bgColor, false);
     }
 
     if (t.hasArtwork) {
       bool ok = NowPlaying::fetchArtwork(WifiPortal::getVercelBaseUrl(), WifiPortal::getUserId(),
                                           WifiPortal::getApiKey(), artworkBuf, 120 * 120);
       if (ok) {
-        tft.drawRGBBitmap(0, 0, artworkBuf, 120, 120);
+        dash_artwork.chrome.setBackgroundBitmap(artworkBuf, 120, 120);
       } else {
-        Serial.println("Failed to fetch artwork, keeping the background color.");
+        Serial.println("Failed to fetch artwork, keeping the previous cover art.");
       }
     }
 
@@ -112,46 +119,46 @@ static void showNowPlaying(const NowPlaying::Track& t) {
       currentLyrics.lines.clear();
       currentLyrics.found = false;
     }
-    lastLyricLineIdx = -1;
+    updateLyricsSource();
+
+    // Strip diacritics before drawing: the dashboard's DashText fonts
+    // (see esp32-plan_2.md, "UTF-8 / Vietnamese text note") have no
+    // Vietnamese glyphs.
+    dash_artwork.setSongName(TextUtils::stripDiacriticsUtf8(t.trackName));
+    dash_artwork.setArtist(TextUtils::stripDiacriticsUtf8(t.artistName));
 
     lastTrackId = t.trackId;
+    dashboard_draw(); // full repaint: new bg color / artwork / song / artist / lyrics all changed together
   }
 
-  // Draw track info text (rough position, adjust to match the actual dashboard layout).
-  // Strip diacritics before drawing: the default Adafruit_GFX font has no Vietnamese
-  // glyphs (see esp32-plan_2.md, "UTF-8 / Vietnamese text note")
-  String trackNameAscii = TextUtils::stripDiacriticsUtf8(t.trackName);
-  String artistNameAscii = TextUtils::stripDiacriticsUtf8(t.artistName);
-
-  tft.fillRect(0, 140, tft.width(), 60, ST77XX_BLACK);
-  tft.setCursor(0, 140);
-  tft.setTextColor(ST77XX_WHITE);
-  tft.setTextSize(1);
-  tft.println(trackNameAscii);
-  tft.setTextColor(ST77XX_CYAN);
-  tft.println(artistNameAscii);
+  // Playback state + progress bar refresh every poll, track change or not
+  dash_playback.setState(t.isPlaying ? DASH_PLAYING : DASH_PAUSED);
+  if (t.durationMs > 0) {
+    dash_playback.setProgress((float)t.progressMs / (float)t.durationMs);
+  }
 
   // Update the currently active lyric line (no API call needed, just compare progress_ms)
   if (currentLyrics.found && currentLyrics.synced) {
     int idx = Lyrics::findCurrentLine(currentLyrics, t.progressMs);
     if (idx >= 0 && idx != lastLyricLineIdx) {
-      String lineAscii = TextUtils::stripDiacriticsUtf8(currentLyrics.lines[idx].text);
-      tft.fillRect(0, 360, tft.width(), 20, ST77XX_BLACK);
-      tft.setCursor(0, 360);
-      tft.setTextColor(ST77XX_YELLOW);
-      tft.println(lineAscii);
+      dash_lyrics.setLyricsCursor((uint16_t)idx);
       lastLyricLineIdx = idx;
     }
   }
+
+  dashboard_update(); // repaints only what's dirty (scrolling text, progress thumb, etc.)
 }
 
 static void showIdleScreen() {
-  tft.fillScreen(ST77XX_BLACK);
-  tft.setCursor(10, 100);
-  tft.setTextColor(ST77XX_WHITE);
-  tft.setTextSize(1);
-  tft.println("Not Playing");
-  lastTrackId = ""; // force re-fetching artwork once playback resumes
+  dash_artwork.setSongName("Not Playing");
+  dash_artwork.setArtist("");
+  dash_playback.setState(DASH_PAUSED);
+  dash_playback.setProgress(0.0f);
+  lyricTextsCount = 0;
+  dash_lyrics.setLyricsSource(lyricTextsBuf, 0);
+  lastTrackId = ""; // force re-fetching artwork/lyrics once playback resumes
+  lastLyricLineIdx = -1;
+  dashboard_draw();
 }
 
 // ---------- Poll now-playing + update the screen ----------
@@ -219,7 +226,7 @@ void setup() {
   pinMode(BTN_NEXT, INPUT_PULLUP);
   pinMode(BTN_PREV, INPUT_PULLUP);
 
-  Serial.println("ST7789 color test starting...");
+  Serial.println("ST7789 dashboard starting...");
 
   // Drive "power pins" for the display (GPIO32/33 are valid outputs).
   pinMode(TFT_GND, OUTPUT);
@@ -231,14 +238,13 @@ void setup() {
   // Init SPI with custom pins
   SPI.begin(TFT_SCLK, -1 /* MISO not used */, TFT_MOSI, TFT_CS);
 
-  // Init display - common 1.3"/1.54" ST7789 modules are 240x240
-  // Change to 240x320 if you have that variant (uncomment tft.init line below accordingly)
-  tft.init(240, 320);           // 240x240 square display
-  // tft.init(240, 320);         // uncomment for 240x320 display instead
+  // Init display - 240x320 per the dashboard's arduino_gfx/320x240 layout
+  tft.init(240, 320);
 
   tft.setRotation(3);
   tft.fillScreen(ST77XX_BLACK);
 
+  dashboard_begin();
   Serial.println("Display initialized.");
 
   // Poll once immediately at startup to show data right away, instead of waiting
@@ -265,4 +271,8 @@ void loop() {
     pollNowPlaying();
     lastPollMs = now;
   }
+
+  // Keep scrolling text / animated widgets ticking every loop, independent
+  // of the (slower) now-playing poll interval.
+  dashboard_update();
 }

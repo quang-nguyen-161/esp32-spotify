@@ -1,4 +1,6 @@
 #include "dashboard.h"
+#include <Fonts/FreeMonoBoldOblique9pt7b.h>
+#include <Fonts/FreeMonoOblique9pt7b.h>
 
 // ---------------------------------------------------------------------
 // dashboard.cpp
@@ -199,6 +201,16 @@ void DashText::setPos(int16_t x, int16_t y) { _x = x; _y = y; _dirty = true; }
 void DashText::setTextColor(uint16_t color) { _color = color; _dirty = true; render(); }
 void DashText::setBgColor(uint16_t color)   { _bgColor = color; _dirty = true; render(); }
 
+// Assigns a custom Adafruit GFX font (pass nullptr to go back to the
+// built-in default font). Must re-measure since glyph metrics change
+// with the font, then force a repaint.
+void DashText::setFont(const GFXfont *font) {
+  _font = font;
+  measure();
+  _dirty = true;
+  render();
+}
+
 void DashText::setScrollSpeed(uint16_t pxPerStep, uint16_t stepIntervalMs) {
   _pxPerStep = pxPerStep;
   _stepIntervalMs = stepIntervalMs;
@@ -208,6 +220,7 @@ void DashText::measure() {
   if (!_canvas) return;
   int16_t x1, y1;
   uint16_t w, h;
+  _canvas->setFont(_font);
   _canvas->setTextSize(_textSize);
   _canvas->getTextBounds(_text, 0, 0, &x1, &y1, &w, &h);
   _textWidthPx = (int16_t)w;
@@ -230,6 +243,7 @@ void DashText::render() {
   if (!_dirty) return;       // nothing changed since last paint -> skip the SPI write entirely
 
   _canvas->fillScreen(_bgColor);
+  _canvas->setFont(_font);
   _canvas->setTextColor(_color);
   _canvas->setTextWrap(false);
   _canvas->setTextSize(_textSize);
@@ -419,6 +433,8 @@ DashArtwork::DashArtwork(int16_t x, int16_t y, int16_t w, int16_t h)
   // can override via setColors()/setBgColor() if the plate art differs.
   songName.setBgColor(0x0000);
   artistName.setBgColor(0x0000);
+  songName.setFont(&FreeMonoBoldOblique9pt7b);
+  artistName.setFont(&FreeMonoOblique9pt7b);
   setSongPlate(image_song_name__1__pixels, SONG_PLATE_X, SONG_PLATE_Y, SONG_PLATE_W, SONG_PLATE_H);
   setArtistPlate(image_artist__1__pixels, ARTIST_PLATE_X, ARTIST_PLATE_Y, ARTIST_PLATE_W, ARTIST_PLATE_H);
 }
@@ -480,6 +496,8 @@ DashLyrics::DashLyrics(int16_t x, int16_t y)
     nextSongLabel(NEXT_SONG_X, NEXT_SONG_Y, DASH_LYRICS_LINE_W, 14, 1, 0x0000, 0xFFFF) {
   chrome.setBackgroundBitmap(image_lyrics_pixels, WIN_HEARTLIST_W, WIN_HEARTLIST_H);
   playlistLabel.setText("Next:");
+  playlistLabel.setFont(&FreeMonoOblique9pt7b);
+  nextSongLabel.setFont(&FreeMonoOblique9pt7b);
 }
 
 void DashLyrics::setLine(uint8_t index, const String &text) {

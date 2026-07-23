@@ -1,0 +1,9 @@
+{
+  "name": "spotify-esp32-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@vercel/kv": "^1.0.1",
+    "sharp": "^0.35.3"
+  }
+}

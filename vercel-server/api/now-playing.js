@@ -5,14 +5,14 @@ const ART_SIZE = 120; // change to match ESP32 screen size, e.g. 120x120
 
 function rgb888ToRgb565Buffer(rgbBuffer, width, height) {
   // rgbBuffer: raw RGB (3 bytes/pixel) from sharp
-  // returns a Buffer of RGB565, big-endian, 2 bytes/pixel
+  // returns a Buffer of RGB565, little-endian, 2 bytes/pixel
   const out = Buffer.alloc(width * height * 2);
   for (let i = 0, p = 0; i < rgbBuffer.length; i += 3, p += 2) {
     const r = rgbBuffer[i];
     const g = rgbBuffer[i + 1];
     const b = rgbBuffer[i + 2];
     const val = ((r & 0xf8) << 8) | ((g & 0xfc) << 3) | (b >> 3);
-    out.writeUInt16BE(val, p);
+    out.writeUInt16LE(val, p);
   }
   return out;
 }
@@ -146,7 +146,7 @@ async function spotifyFetch(url, access_token, options = {}) {
 }
 
 export default async function handler(req, res) {
-  // force explicit UTF-8 so non-ASCII text (Vietnamese, etc.) is never misinterpreted
+  // force explicit UTF-8 so non-ASCII text is never misinterpreted (stripped text is still valid UTF-8/ASCII)
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
 
   if (req.headers['x-api-key'] !== process.env.ESP32_API_KEY) {

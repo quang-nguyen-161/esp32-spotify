@@ -12,7 +12,7 @@ function rgb888ToRgb565Buffer(rgbBuffer, width, height) {
     const g = rgbBuffer[i + 1];
     const b = rgbBuffer[i + 2];
     const val = ((r & 0xf8) << 8) | ((g & 0xfc) << 3) | (b >> 3);
-    out.writeUInt16LE(val, p);
+    out.writeUInt16BE(val, p);
   }
   return out;
 }
@@ -21,17 +21,27 @@ function rgbToHex(r, g, b) {
   return '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('');
 }
 
-// Recursively normalize all strings to NFC Unicode form.
-// Spotify data (and any source data) can contain diacritics like Vietnamese
-// text encoded as decomposed Unicode (NFD) instead of precomposed (NFC),
-// which some ESP32 fonts/renderers won't display correctly. Normalizing
-// here guarantees consistent, standard UTF-8 NFC bytes over the wire.
-function toUtf8(value) {
-  if (typeof value === 'string') return value.normalize('NFC');
-  if (Array.isArray(value)) return value.map(toUtf8);
+// Strip diacritics (accents/tone marks) down to plain ASCII Latin letters.
+// The ESP32 display's current font can't render Vietnamese diacritics
+// (or non-ASCII text in general), so we normalize + strip them here on the
+// server instead of sending bytes the device can't display.
+//   - NFD decomposition splits "ã" into "a" + combining tilde, which we then drop.
+//   - "đ"/"Đ" don't decompose via NFD, so they're replaced manually.
+function stripDiacritics(str) {
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // combining accent/tone marks
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D');
+}
+
+// Recursively apply stripDiacritics to every string in an object/array.
+function toAscii(value) {
+  if (typeof value === 'string') return stripDiacritics(value);
+  if (Array.isArray(value)) return value.map(toAscii);
   if (value && typeof value === 'object') {
     const out = {};
-    for (const key in value) out[key] = toUtf8(value[key]);
+    for (const key in value) out[key] = toAscii(value[key]);
     return out;
   }
   return value;
@@ -187,7 +197,7 @@ export default async function handler(req, res) {
     ]);
 
     // default mode: JSON metadata, ESP32 decides when to call ?art=raw
-    res.json(toUtf8({
+    res.json(toAscii({
       playing: data.is_playing,
       track_id: track.id,
       track: track.name,

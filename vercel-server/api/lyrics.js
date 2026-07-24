@@ -1,15 +1,26 @@
 import { kv } from '@vercel/kv';
 
-// Recursively normalize all strings to NFC Unicode form.
-// Source text (Vietnamese, etc.) can arrive as decomposed Unicode (NFD)
-// depending on the client/OS that sent it, which some ESP32 fonts/renderers
-// won't display correctly. Normalizing guarantees consistent NFC UTF-8 bytes.
-function toUtf8(value) {
-  if (typeof value === 'string') return value.normalize('NFC');
-  if (Array.isArray(value)) return value.map(toUtf8);
+// Strip diacritics (accents/tone marks) down to plain ASCII Latin letters.
+// The ESP32 display's font currently can't render Vietnamese diacritics
+// (or non-ASCII text in general), so we normalize + strip them here on the
+// server instead of sending bytes the device can't display.
+//   - NFD decomposition splits "ã" into "a" + combining tilde, which we then drop.
+//   - "đ"/"Đ" don't decompose via NFD, so they're replaced manually.
+function stripDiacritics(str) {
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // combining accent/tone marks
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D');
+}
+
+// Recursively apply stripDiacritics to every string in an object/array.
+function toAscii(value) {
+  if (typeof value === 'string') return stripDiacritics(value);
+  if (Array.isArray(value)) return value.map(toAscii);
   if (value && typeof value === 'object') {
     const out = {};
-    for (const key in value) out[key] = toUtf8(value[key]);
+    for (const key in value) out[key] = toAscii(value[key]);
     return out;
   }
   return value;
@@ -42,17 +53,16 @@ function parseLrc(lrcText) {
 // GET /api/lyrics?track=<name>&artist=<name>&album=<name>&duration=<seconds>
 // album and duration are optional but help lrclib match more accurately
 export default async function handler(req, res) {
-  // force explicit UTF-8 so non-ASCII text (Vietnamese, etc.) is never misinterpreted
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
 
   if (req.headers['x-api-key'] !== process.env.ESP32_API_KEY) {
     return res.status(401).json({ error: 'unauthorized' });
   }
 
-  // normalize incoming query text too, in case the caller sends decomposed Unicode
-  const track = req.query.track ? req.query.track.normalize('NFC') : undefined;
-  const artist = req.query.artist ? req.query.artist.normalize('NFC') : undefined;
-  const album = req.query.album ? req.query.album.normalize('NFC') : undefined;
+  // normalize incoming query text too (in case it has diacritics), for cache key consistency
+  const track = req.query.track ? stripDiacritics(req.query.track.normalize('NFC')) : undefined;
+  const artist = req.query.artist ? stripDiacritics(req.query.artist.normalize('NFC')) : undefined;
+  const album = req.query.album ? stripDiacritics(req.query.album.normalize('NFC')) : undefined;
   const duration = req.query.duration;
 
   if (!track || !artist) {
@@ -62,14 +72,18 @@ export default async function handler(req, res) {
   const cacheKey = `lyrics:${artist}:${track}:${album || ''}`.toLowerCase();
   const cached = await kv.get(cacheKey);
   if (cached) {
-    return res.json(toUtf8(cached));
+    const cachedPayload = JSON.stringify(toAscii(cached));
+    res.setHeader('X-Content-Byte-Length', Buffer.byteLength(cachedPayload, 'utf8'));
+    return res.send(cachedPayload);
   }
 
+  // lrclib matching still uses the original (with diacritics) query for accuracy,
+  // since the source lyrics database is indexed with proper accents
   const params = new URLSearchParams({
-    track_name: track,
-    artist_name: artist,
+    track_name: req.query.track,
+    artist_name: req.query.artist,
   });
-  if (album) params.set('album_name', album);
+  if (req.query.album) params.set('album_name', req.query.album);
   if (duration) params.set('duration', duration);
 
   const lrcResp = await fetch(`https://lrclib.net/api/get?${params.toString()}`, {
@@ -105,10 +119,13 @@ export default async function handler(req, res) {
     result = { found: false, synced: false, lines: [] };
   }
 
-  result = toUtf8(result);
+  // strip diacritics for the ESP32-facing response before caching
+  result = toAscii(result);
 
   // cache for 30 days, song lyrics don't change
   await kv.set(cacheKey, result, { ex: 60 * 60 * 24 * 30 });
 
-  res.json(result);
+  const payload = JSON.stringify(result);
+  res.setHeader('X-Content-Byte-Length', Buffer.byteLength(payload, 'utf8'));
+  res.send(payload);
 }

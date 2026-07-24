@@ -12,40 +12,11 @@
 //   - background grid          -> drawn full-screen in dashboard_draw()
 //   - window chrome bitmaps    -> DashWindow::setBackgroundBitmap()
 //   - color playback buttons   -> DashIcon::addColorVariant()
-// Plus a hue-rotation helper to re-theme the whole dashboard (flat
-// colors always; bitmaps too, if you enable per-pixel rotation).
 // ---------------------------------------------------------------------
 
 extern Adafruit_ST7789 *gfx;
 
 uint16_t dash_darkenColor565(uint16_t color, uint8_t pct);
-
-// ---- Hue rotation helpers (get/change the dashboard's main color) ----
-// Rotates an RGB565 color's hue by `degrees` (can be negative, wraps).
-uint16_t dashboard_rotateHue565(uint16_t color565, int16_t degrees);
-
-// The dashboard's reference "main color" (before rotation). Defaults to
-// the yellow button accent used across the bitmap assets.
-extern uint16_t dash_colorMainBase;
-
-// Current hue rotation offset in degrees (0 = no change from base colors).
-extern int16_t dash_hueRotation;
-
-// Returns the CURRENT effective main color (base rotated by dash_hueRotation).
-uint16_t dashboard_getMainColor(void);
-
-// Sets the rotation offset and re-applies it to every flat dashboard
-// color (frame/text/progress/icon tint colors). Does NOT recolor the
-// RGB565 bitmap assets themselves (that requires per-pixel rotation,
-// see dashboard_setHueRotationBitmaps() below) unless enabled.
-// redraw=true also triggers an immediate dashboard_draw().
-void dashboard_setHueRotation(int16_t degrees, bool redraw = true);
-
-// Also rotate the hue of the bitmap assets themselves (background,
-// window chrome, buttons) when redrawing. This is per-pixel and costs
-// noticeably more CPU/time per redraw -- off by default.
-extern bool dash_hueRotateBitmaps;
-void dashboard_setHueRotateBitmaps(bool enabled);
 
 #define DASH_HOVER_LIFT_PX 3
 #define DASH_HOVER_DARKEN_PCT 40
@@ -113,6 +84,7 @@ private:
   uint16_t _color, _bgColor;
   String _text;
   int16_t _textWidthPx;
+  int16_t _baselineY; // y cursor needed so glyphs land inside the canvas (custom fonts are baseline-anchored)
   bool _needsScroll;
   int16_t _scrollX;
   unsigned long _lastStepMs;
@@ -188,7 +160,7 @@ public:
   void setControlsVisible(bool minimize, bool maximize, bool close);
 
   // When set, draw() renders this bitmap instead of the primitive chrome.
-  void setBackgroundBitmap(const uint16_t *rgb565Bits, int16_t bmpW, int16_t bmpH);
+  void setBackgroundBitmap(const uint16_t *rgb565Bits, int16_t bmpW, int16_t bmpH, bool useTransparency = true);
   bool hasBackgroundBitmap() const { return _bgBitmap != nullptr; }
 
   void draw(uint16_t bgColor);
@@ -207,6 +179,7 @@ private:
   bool _showMinimize, _showMaximize, _showClose;
 
   const uint16_t *_bgBitmap = nullptr;
+  bool _bgBitmapKeyed = true;
   int16_t _bmpW = 0, _bmpH = 0;
 };
 
@@ -219,13 +192,29 @@ private:
 // ---------------------------------------------------------------------
 class DashArtwork : public DashElement {
 public:
-  DashArtwork(int16_t x, int16_t y, int16_t w, int16_t h);
+  // songBgColor/artistBgColor: the background color DashText fills+blits
+  // behind the song/artist glyphs. This MUST match the actual pixel color
+  // of the song/artist plate bitmap at the text's position, since DashText
+  // does a plain opaque blit (see DashText::render()) -- if it doesn't
+  // match, the text box will show up as a visibly wrong-colored rectangle
+  // over the plate. Defaults to 0xFFFF (white) to match the default plate
+  // assets; pass the real sampled color if you swap in different plates.
+  DashArtwork(int16_t x, int16_t y, int16_t w, int16_t h,
+              uint16_t songBgColor = 0xFFFF, uint16_t artistBgColor = 0xFFFF);
 
   void setSongName(const String &name) { songName.setText(name); }
   void setArtist(const String &artist) { artistName.setText(artist); }
 
   void setFrameColor(uint16_t color) { _frameColor = color; }
   void setColors(uint16_t frameColor, uint16_t songColor, uint16_t artistColor);
+
+  // The live/fetched cover art. This overlays ON TOP of chrome (the
+  // decorative window frame bitmap) at an inset square -- it does NOT
+  // replace chrome. Call this whenever a new track's artwork comes back
+  // from the server; chrome keeps its frame graphic forever.
+  // useTransparency=false by default since photos routinely contain
+  // legitimate black pixels that shouldn't be skipped as "transparent".
+  void setArtwork(const uint16_t *rgb565Bits, int16_t w, int16_t h, bool useTransparency = false);
 
   // Configure the bitmap plates the song/artist text is overlaid on.
   void setSongPlate(const uint16_t *bmp, int16_t x, int16_t y, int16_t w, int16_t h);
@@ -234,13 +223,17 @@ public:
   void draw(uint16_t bgColor);
   void update();
 
-  DashWindow chrome; // cover-art bitmap chrome
+  DashWindow chrome; // decorative cover-art WINDOW FRAME bitmap -- never overwritten by setArtwork()
   DashText songName;
   DashText artistName;
 
 private:
   int16_t _x, _y, _w, _h;
   uint16_t _frameColor;
+
+  const uint16_t *_artBmp = nullptr;
+  int16_t _artW = 0, _artH = 0;
+  bool _artKeyed = false;
 
   const uint16_t *_songPlateBmp = nullptr;
   int16_t _songPlateX = 0, _songPlateY = 0, _songPlateW = 0, _songPlateH = 0;
@@ -319,6 +312,20 @@ public:
   void setProgressColor(uint16_t color) { _progressColor = color; }
   void setIconsColor(uint16_t color); // only affects monochrome icon variants, if used
 
+  // Drive the progress bar (and timeLabel's "M:SS / M:SS" text) directly
+  // from elapsed/duration seconds -- e.g. as reported by a server/API --
+  // instead of computing and calling setProgress(pct01) yourself.
+  // setTime() is the one to call on every periodic poll/update; setElapsed()
+  // and setDuration() are there for when you get the two independently
+  // (e.g. duration once at track-start, elapsed on every tick after).
+  // All three recompute _progress = elapsed/duration internally, so any
+  // later setProgress(pct01) call will simply overwrite it again.
+  void setElapsed(uint32_t seconds);
+  void setDuration(uint32_t seconds);
+  void setTime(uint32_t elapsedSeconds, uint32_t durationSeconds);
+  uint32_t elapsedSeconds() const { return _elapsedSec; }
+  uint32_t durationSeconds() const { return _durationSec; }
+
   // Position/size of the progress-bar thumb bitmap; x is recomputed each
   // draw() from the current progress, y/w/h stay fixed.
   void setThumbBitmap(const uint16_t *bmp, int16_t y, int16_t w, int16_t h);
@@ -329,6 +336,7 @@ public:
   DashIcon prev;
   DashIcon playPause;
   DashIcon next;
+  DashText timeLabel; // "M:SS / M:SS" elapsed/duration caption under the progress bar
 
 private:
   int16_t _progX, _progY, _progW, _progH;
@@ -337,10 +345,14 @@ private:
   DashPlayState _state;
   bool _iconsInitialized;
 
+  uint32_t _elapsedSec = 0;
+  uint32_t _durationSec = 0;
+
   const uint16_t *_thumbBmp = nullptr;
   int16_t _thumbY = 0, _thumbW = 0, _thumbH = 0;
 
   void initIconsIfNeeded();
+  void refreshTimeDisplay(); // recomputes _progress + timeLabel text from _elapsedSec/_durationSec
 };
 
 // ---------------------------------------------------------------------
@@ -361,3 +373,14 @@ void dashboard_updateLyrics();
 void dashboard_updatePlayback();
 void dashboard_begin();
 void dashboard_setBackgroundColor(uint16_t color, bool redraw = true);
+
+// ---------------------------------------------------------------------
+// Server-driven playback time. Call dashboard_setPlaybackTime() whenever
+// your server/API poll returns fresh elapsed/duration numbers (seconds);
+// it updates dash_playback's progress bar, thumb position, and "M:SS /
+// M:SS" timeLabel text together and (by default) repaints just the
+// playback element -- not the whole dashboard -- since this is meant to
+// be called frequently (e.g. once a second).
+void dashboard_setPlaybackTime(uint32_t elapsedSeconds, uint32_t durationSeconds, bool redraw = true);
+void dashboard_setPlaybackElapsed(uint32_t elapsedSeconds, bool redraw = true);
+void dashboard_setPlaybackDuration(uint32_t durationSeconds, bool redraw = true);

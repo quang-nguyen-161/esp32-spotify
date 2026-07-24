@@ -33,26 +33,25 @@ void dashboard_setBackgroundColor(uint16_t color, bool redraw) {
 
 // Guards every DashText::render() call (and anything else that touches
 // `gfx`) from firing during global/static construction, i.e. before
-// SPI.begin()/tft.init() have run in setup(). Global DashArtwork/DashLyrics
-// objects call setText()/setBgColor() from their constructors (to set
-// initial captions/plates), which would otherwise write to the TFT over
-// SPI/UART before the hardware is initialized -- crashing inside
-// Adafruit_GFX/Adafruit_SPITFT during _GLOBAL__sub_I_tft. Call
-// dashboard_begin() once, right after tft.init(), before anything else
-// touches the dashboard.
+// SPI.begin()/tft.init() have run in setup(). Global DashArtwork/DashLyrics/
+// DashPlayback objects call setText()/setBgColor()/setFont() from their
+// constructors (to set initial captions/plates/time text), which would
+// otherwise write to the TFT over SPI before the hardware is initialized.
+//
+// This is NOT just about ordering within this file: `gfx` is defined in
+// main.cpp and assigned there (`gfx = &tft;`), while dash_artwork/
+// dash_lyrics/dash_playback are globals in THIS file. C++ does not
+// guarantee initialization order across translation units, so without
+// this guard, gfx can still be null (or tft not yet SPI/hardware-
+// initialized) when these constructors run -- crashing with a
+// LoadProhibited panic (EXCVADDR 0x0) during static init, before setup()
+// even starts running. Call dashboard_begin() once, right after
+// tft.init(), before anything else touches the dashboard.
 static bool dash_hwReady = false;
 
 void dashboard_begin() {
   dash_hwReady = true;
 }
-
-// ---------------------------------------------------------------------
-// Hue rotation helpers
-// ---------------------------------------------------------------------
-
-uint16_t dash_colorMainBase = 0xFFE0; // yellow, matches the Lopaka button accent
-int16_t dash_hueRotation = 0;
-bool dash_hueRotateBitmaps = false;
 
 uint16_t dash_darkenColor565(uint16_t color, uint8_t pct) {
   if (pct > 100) pct = 100;
@@ -65,106 +64,35 @@ uint16_t dash_darkenColor565(uint16_t color, uint8_t pct) {
   return (uint16_t)((r << 11) | (g << 5) | b);
 }
 
-// RGB565 -> float RGB -> HSV, rotate hue, back to RGB565. Straightforward
-// (not fixed-point optimized); fine for occasional theme-change redraws.
-uint16_t dashboard_rotateHue565(uint16_t color565, int16_t degrees) {
-  if (degrees == 0) return color565;
-
-  uint8_t r5 = (color565 >> 11) & 0x1F, g6 = (color565 >> 5) & 0x3F, b5 = color565 & 0x1F;
-  float r = r5 / 31.0f, g = g6 / 63.0f, b = b5 / 31.0f;
-
-  float maxc = fmaxf(r, fmaxf(g, b));
-  float minc = fminf(r, fminf(g, b));
-  float delta = maxc - minc;
-  float h = 0.0f, s = (maxc <= 0.0f) ? 0.0f : (delta / maxc), v = maxc;
-
-  if (delta > 1e-6f) {
-    if      (maxc == r) h = 60.0f * fmodf(((g - b) / delta), 6.0f);
-    else if (maxc == g) h = 60.0f * (((b - r) / delta) + 2.0f);
-    else                h = 60.0f * (((r - g) / delta) + 4.0f);
-  }
-  if (h < 0) h += 360.0f;
-
-  h = fmodf(h + degrees + 360.0f, 360.0f);
-
-  float c = v * s;
-  float x = c * (1.0f - fabsf(fmodf(h / 60.0f, 2.0f) - 1.0f));
-  float m = v - c;
-  float rf, gf, bf;
-  if      (h <  60.0f) { rf = c; gf = x; bf = 0; }
-  else if (h < 120.0f) { rf = x; gf = c; bf = 0; }
-  else if (h < 180.0f) { rf = 0; gf = c; bf = x; }
-  else if (h < 240.0f) { rf = 0; gf = x; bf = c; }
-  else if (h < 300.0f) { rf = x; gf = 0; bf = c; }
-  else                 { rf = c; gf = 0; bf = x; }
-
-  uint8_t or5 = (uint8_t)roundf((rf + m) * 31.0f);
-  uint8_t og6 = (uint8_t)roundf((gf + m) * 63.0f);
-  uint8_t ob5 = (uint8_t)roundf((bf + m) * 31.0f);
-  return (uint16_t)((or5 << 11) | (og6 << 5) | ob5);
-}
-
-uint16_t dashboard_getMainColor(void) {
-  return dashboard_rotateHue565(dash_colorMainBase, dash_hueRotation);
-}
-
-void dashboard_setHueRotation(int16_t degrees, bool redraw) {
-  dash_hueRotation = ((degrees % 360) + 360) % 360;
-  if (redraw) dashboard_draw();
-}
-
-void dashboard_setHueRotateBitmaps(bool enabled) {
-  dash_hueRotateBitmaps = enabled;
-}
-
 // Color key used to mark "no pixel here" in the exported RGB565 assets.
-// Pure black (0x0000) is never an intentional fill color in these Lopaka
-// exports, so we treat it as transparent and just don't plot it -- that
-// lets the real background (or whatever was drawn underneath) show
-// through instead of getting stamped over with a black square.
+// Pure black (0x0000) is treated as transparent by default and simply not
+// plotted, so the real background (or whatever was drawn underneath) shows
+// through instead of getting stamped over with a black square. Some assets
+// (e.g. cover art) legitimately contain black pixels though, so every
+// drawing path below takes a `useTransparency` flag -- pass false for
+// those to draw every pixel, including black ones, as-is.
 #define DASH_TRANSPARENT_KEY 0x0000
 
-// Draws a full-color RGB565 PROGMEM bitmap, hue-rotating every pixel on
-// the fly. Used only when dash_hueRotateBitmaps is enabled -- costs one
-// pgm_read_word + one HSV round-trip per pixel, so it's noticeably
-// slower than a plain drawRGBBitmap(); fine for an occasional theme
-// change, not for something you'd call every frame.
-static void drawBitmapHueRotated(int16_t x, int16_t y, const uint16_t *bmp,
-                                  int16_t w, int16_t h, int16_t degrees) {
+// Keyed blit: draws bmp at (x,y), skipping DASH_TRANSPARENT_KEY pixels
+// when useTransparency is true (the default); draws every pixel as-is,
+// including black, when useTransparency is false.
+static void drawBitmapKeyed(int16_t x, int16_t y, const uint16_t *bmp, int16_t w, int16_t h,
+                             bool useTransparency = true) {
   gfx->startWrite();
   for (int16_t j = 0; j < h; j++) {
     for (int16_t i = 0; i < w; i++) {
       uint16_t px = pgm_read_word(&bmp[j * w + i]);
-      if (px == DASH_TRANSPARENT_KEY) continue; // skip black -> transparent
-      gfx->writePixel(x + i, y + j, dashboard_rotateHue565(px, degrees));
-    }
-  }
-  gfx->endWrite();
-}
-
-// Plain (non-hue-rotated) keyed blit: same idea, just no HSV round-trip.
-// Slower than gfx->drawRGBBitmap() since it can't push a solid block, but
-// that's the cost of skipping the black "holes" pixel by pixel.
-static void drawBitmapKeyed(int16_t x, int16_t y, const uint16_t *bmp, int16_t w, int16_t h) {
-  gfx->startWrite();
-  for (int16_t j = 0; j < h; j++) {
-    for (int16_t i = 0; i < w; i++) {
-      uint16_t px = pgm_read_word(&bmp[j * w + i]);
-      if (px == DASH_TRANSPARENT_KEY) continue; // skip black -> transparent
+      if (useTransparency && px == DASH_TRANSPARENT_KEY) continue; // skip black -> transparent
       gfx->writePixel(x + i, y + j, px);
     }
   }
   gfx->endWrite();
 }
 
-// Central place every bitmap asset draw goes through, so hue rotation
-// (when enabled) applies uniformly to background/chrome/buttons alike.
-static void drawAsset(int16_t x, int16_t y, const uint16_t *bmp, int16_t w, int16_t h) {
-  if (dash_hueRotateBitmaps && dash_hueRotation != 0) {
-    drawBitmapHueRotated(x, y, bmp, w, h, dash_hueRotation);
-  } else {
-    drawBitmapKeyed(x, y, bmp, w, h);
-  }
+// Central place every bitmap asset draw goes through.
+static void drawAsset(int16_t x, int16_t y, const uint16_t *bmp, int16_t w, int16_t h,
+                       bool useTransparency = true) {
+  drawBitmapKeyed(x, y, bmp, w, h, useTransparency);
 }
 
 // ---------------------------------------------------------------------
@@ -175,7 +103,7 @@ DashText::DashText(int16_t x, int16_t y, int16_t w, int16_t h,
                     uint8_t textSize, uint16_t textColor, uint16_t bgColor)
   : _x(x), _y(y), _w(w), _h(h), _textSize(textSize),
     _color(textColor), _bgColor(bgColor), _text(""),
-    _textWidthPx(0), _needsScroll(false), _scrollX(0), _lastStepMs(0),
+    _textWidthPx(0), _baselineY(0), _needsScroll(false), _scrollX(0), _lastStepMs(0),
     _stepIntervalMs(DASH_TEXT_DEFAULT_INTERVAL_MS), _pxPerStep(DASH_TEXT_DEFAULT_STEP_PX),
     _canvas(nullptr), _dirty(true) {
   allocCanvas();
@@ -225,6 +153,13 @@ void DashText::measure() {
   _canvas->getTextBounds(_text, 0, 0, &x1, &y1, &w, &h);
   _textWidthPx = (int16_t)w;
   _needsScroll = _textWidthPx > _w;
+  // Custom GFXfonts are baseline-anchored: y1 is the (negative) distance
+  // from the baseline up to the top of the glyphs. If we leave the cursor
+  // at y=0 (as if using the built-in top-anchored font), every glyph gets
+  // drawn above row 0 -- i.e. off the top of the canvas -- so it never
+  // shows up. Push the baseline down by -y1 so the glyphs land inside the
+  // canvas. For the built-in font y1 is 0, so this stays a no-op there.
+  _baselineY = -y1;
 }
 
 void DashText::setText(const String &text) {
@@ -240,26 +175,41 @@ void DashText::setText(const String &text) {
 void DashText::render() {
   if (!_canvas) return;
   if (!dash_hwReady) return; // hardware not initialized yet (e.g. called from a global object's constructor)
-  if (!_dirty) return;       // nothing changed since last paint -> skip the SPI write entirely
 
-  _canvas->fillScreen(_bgColor);
-  _canvas->setFont(_font);
-  _canvas->setTextColor(_color);
-  _canvas->setTextWrap(false);
-  _canvas->setTextSize(_textSize);
+  if (_dirty) {
+    _canvas->fillScreen(_bgColor);
+    _canvas->setFont(_font);
+    _canvas->setTextColor(_color);
+    _canvas->setTextWrap(false);
+    _canvas->setTextSize(_textSize);
 
-  if (_needsScroll) {
-    _canvas->setCursor(-_scrollX, 0);
-    _canvas->print(_text);
-    _canvas->setCursor(-_scrollX + _textWidthPx + DASH_TEXT_SCROLL_GAP_PX, 0);
-    _canvas->print(_text);
-  } else {
-    _canvas->setCursor(0, 0);
-    _canvas->print(_text);
+    if (_needsScroll) {
+      _canvas->setCursor(-_scrollX, _baselineY);
+      _canvas->print(_text);
+      _canvas->setCursor(-_scrollX + _textWidthPx + DASH_TEXT_SCROLL_GAP_PX, _baselineY);
+      _canvas->print(_text);
+    } else {
+      _canvas->setCursor(0, _baselineY);
+      _canvas->print(_text);
+    }
+    _dirty = false; // canvas content is now current; only the blit below still runs every call
   }
 
+  // Always re-blit the (possibly cached, possibly just-regenerated) canvas
+  // to the screen. This must NOT be skipped even when _dirty was already
+  // false: something drawn after our last blit (e.g. a plate/chrome
+  // bitmap painted over this same screen region during a full redraw)
+  // can overwrite these exact pixels, and the only way to restore the
+  // text is to blit again -- regenerating the canvas content would be
+  // wasted work since the text itself hasn't changed.
+  //
+  // Plain opaque blit -- no color-key skipping here. Asset bitmaps
+  // (drawAsset/drawBitmapKeyed) are the only place that skip black
+  // pixels for transparency; DashText always paints its full _w x _h
+  // rect using _bgColor, so callers MUST pass a _bgColor that matches
+  // whatever it sits on (see setBgColor()/constructor) or it'll show
+  // as a mismatched box.
   gfx->drawRGBBitmap(_x, _y, _canvas->getBuffer(), _w, _h);
-  _dirty = false; // clean until the next state change
 }
 
 void DashText::draw() { render(); }
@@ -351,29 +301,16 @@ void DashWindow::setControlsVisible(bool minimize, bool maximize, bool close) {
   _showClose = close;
 }
 
-void DashWindow::setBackgroundBitmap(const uint16_t *rgb565Bits, int16_t bmpW, int16_t bmpH) {
+void DashWindow::setBackgroundBitmap(const uint16_t *rgb565Bits, int16_t bmpW, int16_t bmpH, bool useTransparency) {
   _bgBitmap = rgb565Bits;
   _bmpW = bmpW;
   _bmpH = bmpH;
+  _bgBitmapKeyed = useTransparency;
 }
 
 void DashWindow::draw(uint16_t bgColor) {
   if (!_bgBitmap) return; // no bitmap chrome assigned -> nothing to draw (fallback removed)
-
-  if (dash_hueRotateBitmaps && dash_hueRotation != 0) {
-    // Reuse the same rotated draw path as other assets.
-    gfx->startWrite();
-    for (int16_t j = 0; j < _bmpH; j++) {
-      for (int16_t i = 0; i < _bmpW; i++) {
-        uint16_t px = pgm_read_word(&_bgBitmap[j * _bmpW + i]);
-        if (px == DASH_TRANSPARENT_KEY) continue; // skip black -> transparent
-        gfx->writePixel(_x + i, _y + j, dashboard_rotateHue565(px, dash_hueRotation));
-      }
-    }
-    gfx->endWrite();
-  } else {
-    drawBitmapKeyed(_x, _y, _bgBitmap, _bmpW, _bmpH);
-  }
+  drawBitmapKeyed(_x, _y, _bgBitmap, _bmpW, _bmpH, _bgBitmapKeyed);
 }
 
 // ---------------------------------------------------------------------
@@ -407,6 +344,25 @@ static const int16_t ARTIST_PLATE_W = 94, ARTIST_PLATE_H = 23;
 // Text positions (adjust if needed depending on font)
 static const int16_t SONG_TEXT_X = 25, SONG_TEXT_Y = 191;
 static const int16_t ARTIST_TEXT_X = 45, ARTIST_TEXT_Y = 220;
+
+// Offsets of every DashArtwork sub-element relative to the old fixed
+// WIN_SKY_X/WIN_SKY_Y anchor. DashArtwork now places its chrome at the
+// (x,y) square the caller passes in (instead of always at WIN_SKY_X/Y),
+// and everything else -- plates, text -- is positioned relative to that
+// same (x,y) using these offsets, so the whole widget moves as one unit
+// and overlaps whatever square you give it.
+static const int16_t SONG_PLATE_OFF_X   = SONG_PLATE_X   - WIN_SKY_X;
+static const int16_t SONG_PLATE_OFF_Y   = SONG_PLATE_Y   - WIN_SKY_Y;
+static const int16_t ARTIST_PLATE_OFF_X = ARTIST_PLATE_X - WIN_SKY_X;
+static const int16_t ARTIST_PLATE_OFF_Y = ARTIST_PLATE_Y - WIN_SKY_Y;
+static const int16_t SONG_TEXT_OFF_X    = SONG_TEXT_X    - WIN_SKY_X;
+static const int16_t SONG_TEXT_OFF_Y    = SONG_TEXT_Y    - WIN_SKY_Y;
+static const int16_t ARTIST_TEXT_OFF_X  = ARTIST_TEXT_X  - WIN_SKY_X;
+static const int16_t ARTIST_TEXT_OFF_Y  = ARTIST_TEXT_Y  - WIN_SKY_Y;
+// The live-artwork inset square sits inside the WIN_SKY frame (its size,
+// 120x120, matches main.cpp's fetched RGB565 buffer exactly).
+static const int16_t ARTWORK_OFF_X      = ARTWORK_X      - WIN_SKY_X;
+static const int16_t ARTWORK_OFF_Y      = ARTWORK_Y      - WIN_SKY_Y;
 
 // "Next:" label + next-song
 static const int16_t NEXT_LABEL_X = 166, NEXT_LABEL_Y = 152;
@@ -445,6 +401,12 @@ static const int16_t PROGRESS_THUMB_Y = 197;
 static const int16_t PROGRESS_THUMB_W = 15;
 static const int16_t PROGRESS_THUMB_H = 15;
 
+// "M:SS / M:SS" elapsed/duration caption, directly under the progress bar
+static const int16_t TIME_LABEL_X = PROGRESS_X;
+static const int16_t TIME_LABEL_Y = PROGRESS_Y + PROGRESS_H + 2;
+static const int16_t TIME_LABEL_W = PROGRESS_W;
+static const int16_t TIME_LABEL_H = 12;
+
 // Lyrics
 static const int16_t DASH_LYRICS_LINE_H = 18;
 static const int16_t DASH_LYRICS_LINE_W = 120;
@@ -463,21 +425,46 @@ static const int16_t DASH_LYRICS_LINE_W = 120;
 // rather than a flat color background.
 // ---------------------------------------------------------------------
 
-DashArtwork::DashArtwork(int16_t x, int16_t y, int16_t w, int16_t h)
-  : chrome(WIN_SKY_X, WIN_SKY_Y, WIN_SKY_W, WIN_SKY_H),
-    songName(SONG_TEXT_X, SONG_TEXT_Y, SONG_PLATE_W - (SONG_TEXT_X - SONG_PLATE_X) - 4, 14, 1, 0x0000, 0xFFFF),
-    artistName(ARTIST_TEXT_X, ARTIST_TEXT_Y, ARTIST_PLATE_W - (ARTIST_TEXT_X - ARTIST_PLATE_X) - 4, 12, 1, 0x0000, 0xFFFF),
+DashArtwork::DashArtwork(int16_t x, int16_t y, int16_t w, int16_t h,
+                          uint16_t songBgColor, uint16_t artistBgColor)
+  : chrome(x, y, WIN_SKY_W, WIN_SKY_H),
+    songName(x + SONG_TEXT_OFF_X, y + SONG_TEXT_OFF_Y, SONG_PLATE_W - (SONG_TEXT_X - SONG_PLATE_X) - 4, 14, 1, 0x0000, songBgColor),
+    artistName(x + ARTIST_TEXT_OFF_X, y + ARTIST_TEXT_OFF_Y, ARTIST_PLATE_W - (ARTIST_TEXT_X - ARTIST_PLATE_X) - 4, 12, 1, 0x0000, artistBgColor),
     _x(x), _y(y), _w(w), _h(h), _frameColor(0xFFFF) {
-  chrome.setBackgroundBitmap(image_cover_art_pixels, WIN_SKY_W, WIN_SKY_H);
+  // chrome is placed at the (x,y) square the caller defines -- it overlaps
+  // that square rather than always drawing at a fixed window position.
+  // The bitmap keeps its native WIN_SKY_W/H pixel dimensions (it's a raw
+  // asset, not resizable), so (w,h) sets where the artwork sits, not how
+  // big the bitmap itself is drawn.
+  // Chrome (decorative window-frame bitmap) skips black pixels as
+  // transparent -- this is JUST the frame art, drawn once and rarely
+  // changing, so any black in its design (e.g. outline/shadow pixels)
+  // is treated as "no paint" and lets the background show through.
+  //
+  // This is intentionally DIFFERENT from the live artwork photo below
+  // (see setArtwork(), useTransparency=false by default): a real photo
+  // can legitimately contain black pixels that must be drawn as-is, or
+  // switching between two photos would leave ghost pixels from the
+  // previous track's black regions showing through the new one.
+  chrome.setBackgroundBitmap(image_cover_art_pixels, WIN_SKY_W, WIN_SKY_H, true);
   // Text plates draw directly over their bitmaps, so give the DashText
   // elements a transparent-looking (match-the-plate) background; callers
   // can override via setColors()/setBgColor() if the plate art differs.
-  songName.setBgColor(0x0000);
-  artistName.setBgColor(0x0000);
+  // songName/artistName already got their bgColor from the constructor
+  // args above (songBgColor/artistBgColor) -- no override here. The old
+  // code force-set this to 0x0000 (black) right after construction,
+  // which mismatched the plate bitmap's actual color and produced a
+  // solid black box since DashText::render() does a plain opaque blit.
   songName.setFont(&FreeMonoBoldOblique9pt7b);
   artistName.setFont(&FreeMonoOblique9pt7b);
-  setSongPlate(image_song_name__1__pixels, SONG_PLATE_X, SONG_PLATE_Y, SONG_PLATE_W, SONG_PLATE_H);
-  setArtistPlate(image_artist__1__pixels, ARTIST_PLATE_X, ARTIST_PLATE_Y, ARTIST_PLATE_W, ARTIST_PLATE_H);
+  setSongPlate(image_song_name__1__pixels, x + SONG_PLATE_OFF_X, y + SONG_PLATE_OFF_Y, SONG_PLATE_W, SONG_PLATE_H);
+  setArtistPlate(image_artist__1__pixels, x + ARTIST_PLATE_OFF_X, y + ARTIST_PLATE_OFF_Y, ARTIST_PLATE_W, ARTIST_PLATE_H);
+}
+
+void DashArtwork::setArtwork(const uint16_t *rgb565Bits, int16_t w, int16_t h, bool useTransparency) {
+  _artBmp = rgb565Bits;
+  _artW = w; _artH = h;
+  _artKeyed = useTransparency;
 }
 
 void DashArtwork::setSongPlate(const uint16_t *bmp, int16_t x, int16_t y, int16_t w, int16_t h) {
@@ -498,6 +485,11 @@ void DashArtwork::setColors(uint16_t frameColor, uint16_t songColor, uint16_t ar
 
 void DashArtwork::draw(uint16_t bgColor) {
   chrome.draw(bgColor);
+  // Live artwork overlays the frame at its inset square -- drawn AFTER
+  // chrome so it sits on top, and independently sized/positioned so it
+  // never leaves stale frame pixels around its edges the way overwriting
+  // chrome's own bitmap directly used to.
+  if (_artBmp) drawAsset(_x + ARTWORK_OFF_X, _y + ARTWORK_OFF_Y, _artBmp, _artW, _artH, _artKeyed);
   if (_songPlateBmp) drawAsset(_songPlateX, _songPlateY, _songPlateBmp, _songPlateW, _songPlateH);
   if (_artistPlateBmp) drawAsset(_artistPlateX, _artistPlateY, _artistPlateBmp, _artistPlateW, _artistPlateH);
   songName.draw();
@@ -668,10 +660,12 @@ DashPlayback::DashPlayback(int16_t progressX, int16_t progressY, int16_t progres
                             int16_t prevX, int16_t playPauseX, int16_t nextX, int16_t iconY)
   : chrome(WIN_PLAYER_X, WIN_PLAYER_Y, WIN_PLAYER_W, WIN_PLAYER_H),
     prev(prevX, BTN_REWIND_Y), playPause(playPauseX, BTN_Y), next(nextX, BTN_FORWARD_Y),
+    timeLabel(TIME_LABEL_X, TIME_LABEL_Y, TIME_LABEL_W, TIME_LABEL_H, 1, 0xFFFF, dash_colorBackground),
     _progX(progressX), _progY(progressY), _progW(progressW), _progH(progressH),
     _progressColor(0xFFFF), _progress(0.0f), _state(DASH_PAUSED), _iconsInitialized(false) {
   chrome.setBackgroundBitmap(image_playlist_pixels, WIN_PLAYER_W, WIN_PLAYER_H);
   setThumbBitmap(image_current_play_pixels, PROGRESS_THUMB_Y, PROGRESS_THUMB_W, PROGRESS_THUMB_H);
+  refreshTimeDisplay();
 }
 
 void DashPlayback::setThumbBitmap(const uint16_t *bmp, int16_t y, int16_t w, int16_t h) {
@@ -703,6 +697,44 @@ void DashPlayback::setProgress(float pct01) {
   _progress = pct01;
 }
 
+// Formats whole seconds as "M:SS" (or "H:MM:SS" once it runs past an hour).
+static String dash_formatTime(uint32_t totalSeconds) {
+  uint32_t h = totalSeconds / 3600;
+  uint32_t m = (totalSeconds % 3600) / 60;
+  uint32_t s = totalSeconds % 60;
+  char buf[16];
+  if (h > 0) snprintf(buf, sizeof(buf), "%u:%02u:%02u", (unsigned)h, (unsigned)m, (unsigned)s);
+  else       snprintf(buf, sizeof(buf), "%u:%02u", (unsigned)m, (unsigned)s);
+  return String(buf);
+}
+
+// Recomputes _progress from _elapsedSec/_durationSec and refreshes
+// timeLabel's "M:SS / M:SS" text. Called by setElapsed()/setDuration()/
+// setTime() -- this is the one place that ties the slide bar to the
+// server-reported playback time.
+void DashPlayback::refreshTimeDisplay() {
+  _progress = (_durationSec > 0) ? (float)_elapsedSec / (float)_durationSec : 0.0f;
+  if (_progress < 0.0f) _progress = 0.0f;
+  if (_progress > 1.0f) _progress = 1.0f;
+  timeLabel.setText(dash_formatTime(_elapsedSec) + " / " + dash_formatTime(_durationSec));
+}
+
+void DashPlayback::setElapsed(uint32_t seconds) {
+  _elapsedSec = seconds;
+  refreshTimeDisplay();
+}
+
+void DashPlayback::setDuration(uint32_t seconds) {
+  _durationSec = seconds;
+  refreshTimeDisplay();
+}
+
+void DashPlayback::setTime(uint32_t elapsedSeconds, uint32_t durationSeconds) {
+  _elapsedSec = elapsedSeconds;
+  _durationSec = durationSeconds;
+  refreshTimeDisplay();
+}
+
 void DashPlayback::setIconsColor(uint16_t color) {
   // Only affects icons using monochrome addVariant() bitmaps; full-color
   // addColorVariant() bitmaps are drawn as-is and ignore this.
@@ -710,6 +742,12 @@ void DashPlayback::setIconsColor(uint16_t color) {
   playPause.setColor(color);
   next.setColor(color);
 }
+
+// Fixed erase-color behind the transport buttons (prev/play-pause/next).
+// These sit on the purple theme background, which doesn't change even if
+// dash_colorBackground is retargeted elsewhere -- so use a static color
+// here instead of whatever bgColor happens to be passed to draw().
+static const uint16_t DASH_PLAYBACK_BTN_BG = 0xCD5E;
 
 void DashPlayback::draw(uint16_t bgColor) {
   initIconsIfNeeded();
@@ -727,9 +765,11 @@ void DashPlayback::draw(uint16_t bgColor) {
     drawAsset(thumbX, _thumbY, _thumbBmp, _thumbW, _thumbH);
   }
 
-  prev.draw(bgColor);
-  playPause.draw(bgColor);
-  next.draw(bgColor);
+  prev.draw(DASH_PLAYBACK_BTN_BG);
+  playPause.draw(DASH_PLAYBACK_BTN_BG);
+  next.draw(DASH_PLAYBACK_BTN_BG);
+
+  timeLabel.draw();
 }
 
 // ---------------------------------------------------------------------
@@ -780,4 +820,25 @@ void dashboard_update(void) {
   dashboard_updateArtwork();
   dashboard_updateLyrics();
   dashboard_updatePlayback();
+}
+
+// ---------------------------------------------------------------------
+// Server-driven playback time
+// ---------------------------------------------------------------------
+
+void dashboard_setPlaybackTime(uint32_t elapsedSeconds, uint32_t durationSeconds, bool redraw) {
+  dash_playback.setTime(elapsedSeconds, durationSeconds);
+  // Only the playback element gets repainted -- not the whole dashboard --
+  // since this is expected to be polled often (e.g. once a second).
+  if (redraw) dash_playback.draw(dash_colorBackground);
+}
+
+void dashboard_setPlaybackElapsed(uint32_t elapsedSeconds, bool redraw) {
+  dash_playback.setElapsed(elapsedSeconds);
+  if (redraw) dash_playback.draw(dash_colorBackground);
+}
+
+void dashboard_setPlaybackDuration(uint32_t durationSeconds, bool redraw) {
+  dash_playback.setDuration(durationSeconds);
+  if (redraw) dash_playback.draw(dash_colorBackground);
 }

@@ -1,183 +1,244 @@
-#include "now_playing.h"
+import { kv } from '@vercel/kv';
+import sharp from 'sharp';
 
-#include <WiFiClientSecure.h>
-#include <HTTPClient.h>
-#include <ArduinoJson.h>
+const ART_SIZE = 120; // change to match ESP32 screen size, e.g. 120x120
 
-namespace NowPlaying {
+function rgb888ToRgb565Buffer(rgbBuffer, width, height) {
+  // rgbBuffer: raw RGB (3 bytes/pixel) from sharp
+  // returns a Buffer of RGB565, BIG-endian, 2 bytes/pixel -- must match
+  // what the ESP32 firmware assumes (see now_playing.cpp's fetchArtwork()
+  // comment: "RGB565 from the server is big-endian"). Using
+  // writeUInt16LE() here while the client reads big-endian doesn't just
+  // shift hue slightly -- byte-swapping a packed 5/6/5-bit value scrambles
+  // essentially all the color bits, producing noisy/static-looking pixels
+  // even on an otherwise perfectly-transferred, uncorrupted buffer.
+  const out = Buffer.alloc(width * height * 2);
+  for (let i = 0, p = 0; i < rgbBuffer.length; i += 3, p += 2) {
+    const r = rgbBuffer[i];
+    const g = rgbBuffer[i + 1];
+    const b = rgbBuffer[i + 2];
+    const val = ((r & 0xf8) << 8) | ((g & 0xfc) << 3) | (b >> 3);
+    out.writeUInt16BE(val, p);
+  }
+  return out;
+}
 
-  // Vercel only serves HTTPS, so WiFiClientSecure is required.
-  // setInsecure() = skip verifying the CA chain (traffic is still TLS-encrypted,
-  // just without validating the server identity).
-  // TODO (esp32-plan.md): replace with a real cert (setCACert) for a production build.
-  static WiFiClientSecure makeSecureClient() {
-    WiFiClientSecure client;
-    client.setInsecure();
-    return client;
+function rgbToHex(r, g, b) {
+  return '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('');
+}
+
+// Recursively normalize all strings to NFC Unicode form.
+// Spotify data (and any source data) can contain diacritics like Vietnamese
+// text encoded as decomposed Unicode (NFD) instead of precomposed (NFC),
+// which some ESP32 fonts/renderers won't display correctly. Normalizing
+// here guarantees consistent, standard UTF-8 NFC bytes over the wire.
+function toUtf8(value) {
+  if (typeof value === 'string') return value.normalize('NFC');
+  if (Array.isArray(value)) return value.map(toUtf8);
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const key in value) out[key] = toUtf8(value[key]);
+    return out;
+  }
+  return value;
+}
+
+async function getAccessToken(userId) {
+  const refresh_token = await kv.get(`spotify_refresh_token:${userId}`);
+  if (!refresh_token) return null;
+
+  const resp = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Authorization:
+        'Basic ' +
+        Buffer.from(
+          `${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`
+        ).toString('base64'),
+    },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token,
+    }),
+  });
+  const data = await resp.json();
+  return data.access_token || null;
+}
+
+async function getDominantColor(trackId, imageUrl) {
+  const cacheKey = `artwork_color:${trackId}`;
+  const cached = await kv.get(cacheKey);
+  if (cached) return cached;
+
+  const imgResp = await fetch(imageUrl);
+  const imgArrayBuffer = await imgResp.arrayBuffer();
+
+  // downscale to 1x1, sharp automatically averages/blurs the whole image
+  const { data: avgPixel } = await sharp(Buffer.from(imgArrayBuffer))
+    .resize(1, 1)
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+
+  const dominant_color = rgbToHex(avgPixel[0], avgPixel[1], avgPixel[2]);
+  await kv.set(cacheKey, dominant_color, { ex: 60 * 60 * 24 * 7 });
+  return dominant_color;
+}
+
+async function getArtworkRgb565(trackId, imageUrl) {
+  const cacheKey = `artwork_rgb565:${trackId}:${ART_SIZE}:be`; // "be" = big-endian format version, bump this suffix again if the byte format ever changes
+  const cached = await kv.get(cacheKey);
+  if (cached) return Buffer.from(cached, 'base64');
+
+  const imgResp = await fetch(imageUrl);
+  const imgArrayBuffer = await imgResp.arrayBuffer();
+
+  const { data: rgbBuffer, info } = await sharp(Buffer.from(imgArrayBuffer))
+    .resize(ART_SIZE, ART_SIZE)
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+
+  const rgb565 = rgb888ToRgb565Buffer(rgbBuffer, info.width, info.height);
+
+  // cache as base64 in KV, expires after 7 days (avoid unbounded KV growth)
+  await kv.set(cacheKey, rgb565.toString('base64'), { ex: 60 * 60 * 24 * 7 });
+
+  return rgb565;
+}
+
+async function getNextTrack(access_token) {
+  const resp = await fetch('https://api.spotify.com/v1/me/player/queue', {
+    headers: { Authorization: `Bearer ${access_token}` },
+  });
+  if (!resp.ok) return null;
+
+  const data = await resp.json();
+  const next = data.queue?.[0];
+  if (!next) return null;
+
+  return {
+    track_id: next.id,
+    track: next.name,
+    artist: next.artists?.[0]?.name,
+    duration_ms: next.duration_ms,
+  };
+}
+
+// wraps a Spotify API call, automatically detects 429 rate limiting and returns Retry-After
+async function spotifyFetch(url, access_token, options = {}) {
+  const resp = await fetch(url, {
+    ...options,
+    headers: { Authorization: `Bearer ${access_token}`, ...(options.headers || {}) },
+  });
+  if (resp.status === 429) {
+    const retryAfter = parseInt(resp.headers.get('retry-after') || '1', 10);
+    const err = new Error('rate_limited');
+    err.retryAfter = retryAfter;
+    throw err;
+  }
+  return resp;
+}
+
+export default async function handler(req, res) {
+  // force explicit UTF-8 so non-ASCII text (Vietnamese, etc.) is never misinterpreted
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+
+  if (req.headers['x-api-key'] !== process.env.ESP32_API_KEY) {
+    return res.status(401).json({ error: 'unauthorized' });
   }
 
-  bool fetchMeta(const String& baseUrl, const String& userId, const String& apiKey, Track& outTrack) {
-    if (baseUrl.length() == 0 || userId.length() == 0 || apiKey.length() == 0) {
-      Serial.println("[now_playing] Missing baseUrl / userId / apiKey.");
-      return false;
-    }
+  const userId = req.query.user || 'default';
+  const wantArt = req.query.art; // "raw" -> return binary RGB565 of the current artwork
 
-    WiFiClientSecure client = makeSecureClient();
-    HTTPClient http;
-    String url = baseUrl + "/api/now-playing?user=" + userId;
-
-    if (!http.begin(client, url)) {
-      Serial.println("[now_playing] http.begin() failed (bad URL?).");
-      return false;
-    }
-    http.addHeader("x-api-key", apiKey);
-
-    int httpCode = http.GET();
-
-    if (httpCode == 429) {
-      String payload = http.getString();
-      http.end();
-
-      DynamicJsonDocument rateDoc(256);
-      int retryAfter = 5;
-      if (!deserializeJson(rateDoc, payload)) {
-        retryAfter = rateDoc["retry_after_seconds"] | 5;
-      }
-      Serial.printf("[now_playing] Rate limited, waiting %d seconds...\n", retryAfter);
-      delay(retryAfter * 1000);
-      return false; // skip this poll cycle
-    }
-
-    if (httpCode != 200) {
-      Serial.printf("[now_playing] Error calling now-playing, HTTP code: %d\n", httpCode);
-      if (httpCode > 0) Serial.println(http.getString());
-      http.end();
-      return false;
-    }
-
-    String payload = http.getString();
-    http.end();
-
-    // The JSON can be fairly large (track + next), so the buffer needs to be big enough
-    DynamicJsonDocument doc(2048);
-    DeserializationError err = deserializeJson(doc, payload);
-    if (err) {
-      Serial.print("[now_playing] JSON parse error: ");
-      Serial.println(err.c_str());
-      return false;
-    }
-
-    outTrack.isPlaying     = doc["playing"] | false;
-    outTrack.trackId       = doc["track_id"] | "";
-    outTrack.trackName     = doc["track"] | "";
-    outTrack.artistName    = doc["artist"] | "";
-    outTrack.albumName     = doc["album"] | "";
-    outTrack.progressMs    = doc["progress_ms"] | 0;
-    outTrack.durationMs    = doc["duration_ms"] | 0;
-    outTrack.hasArtwork    = doc["has_artwork"] | false;
-    outTrack.artworkSize   = doc["artwork_size"] | 0;
-    outTrack.dominantColor = doc["dominant_color"] | "";
-    outTrack.volumePercent = doc["volume_percent"] | 0;
-    outTrack.deviceName    = doc["device_name"] | "";
-    outTrack.shuffleState  = doc["shuffle_state"] | false;
-    outTrack.repeatState   = doc["repeat_state"] | "off";
-    outTrack.contextType   = doc["context_type"] | "";
-
-    outTrack.hasNext = doc.containsKey("next") && !doc["next"].isNull();
-    if (outTrack.hasNext) {
-      JsonObject nextObj = doc["next"];
-      outTrack.next.trackId     = nextObj["track_id"] | "";
-      outTrack.next.trackName   = nextObj["track"] | "";
-      outTrack.next.artistName  = nextObj["artist"] | "";
-      outTrack.next.durationMs  = nextObj["duration_ms"] | 0;
-    }
-
-    return true;
+  const access_token = await getAccessToken(userId);
+  if (!access_token) {
+    return res.status(404).json({ error: `user "${userId}" is not authorized yet` });
   }
 
-  bool fetchArtwork(const String& baseUrl, const String& userId, const String& apiKey,
-                     uint16_t* buf, size_t pixelCount) {
-    if (baseUrl.length() == 0 || userId.length() == 0 || apiKey.length() == 0 || buf == nullptr) {
-      Serial.println("[now_playing] Missing parameters for fetchArtwork.");
-      return false;
+  try {
+    // use /v1/me/player instead of /currently-playing to get device, volume, context, shuffle, repeat in one call
+    const spResp = await spotifyFetch(
+      'https://api.spotify.com/v1/me/player',
+      access_token
+    );
+
+    if (spResp.status === 204 || spResp.status === 202) {
+      return res.json({ playing: false });
+    }
+    if (!spResp.ok) {
+      return res.status(spResp.status).json({ error: 'spotify api error' });
     }
 
-    WiFiClientSecure client = makeSecureClient();
-    HTTPClient http;
-    String url = baseUrl + "/api/now-playing?user=" + userId + "&art=raw";
+    const data = await spResp.json();
+    const track = data.item;
+    if (!track) return res.json({ playing: false });
 
-    if (!http.begin(client, url)) {
-      Serial.println("[now_playing] http.begin() failed while fetching artwork.");
-      return false;
-    }
-    http.addHeader("x-api-key", apiKey);
+    const imageUrl = track.album?.images?.[0]?.url;
 
-    int httpCode = http.GET();
-
-    if (httpCode == 429) {
-      String payload = http.getString();
-      http.end();
-      DynamicJsonDocument rateDoc(256);
-      int retryAfter = 5;
-      if (!deserializeJson(rateDoc, payload)) {
-        retryAfter = rateDoc["retry_after_seconds"] | 5;
-      }
-      Serial.printf("[now_playing] Artwork rate limited, waiting %d seconds...\n", retryAfter);
-      delay(retryAfter * 1000);
-      return false;
-    }
-
-    if (httpCode != 200) {
-      Serial.printf("[now_playing] Error fetching artwork, HTTP code: %d\n", httpCode);
-      http.end();
-      return false;
-    }
-
-    WiFiClient* stream = http.getStreamPtr();
-    size_t bytesToRead = pixelCount * 2; // RGB565 = 2 bytes/pixel
-    size_t bytesRead = 0;
-    uint8_t* rawBuf = reinterpret_cast<uint8_t*>(buf);
-
-    unsigned long startMs = millis();
-    const unsigned long timeoutMs = 8000;
-
-    while (bytesRead < bytesToRead && http.connected() && (millis() - startMs) < timeoutMs) {
-      size_t avail = stream->available();
-      if (avail) {
-        size_t toRead = min(avail, bytesToRead - bytesRead);
-        size_t n = stream->readBytes(rawBuf + bytesRead, toRead);
-        bytesRead += n;
-      } else {
-        delay(1);
-      }
-    }
-    http.end();
-
-    if (bytesRead != bytesToRead) {
-      Serial.printf("[now_playing] Artwork incomplete: read %u/%u bytes.\n",
-                     (unsigned)bytesRead, (unsigned)bytesToRead);
-      return false;
+    // raw mode: return the artwork's RGB565 bytes as base64 inside JSON.
+    //
+    // We deliberately do NOT send this as a raw `application/octet-stream`
+    // body anymore. Vercel's serverless response path can re-chunk a binary
+    // body (Transfer-Encoding: chunked) even when Content-Length is set
+    // explicitly below -- the platform's proxy layer sits in front of this
+    // handler and controls that independently of what we set here. A plain
+    // HTTP client that reads the body byte-for-byte off the raw stream (as
+    // the ESP32 was doing via http.getStreamPtr()) has no way to strip the
+    // chunk-size/CRLF framing bytes that get interleaved into a chunked
+    // stream, so those framing bytes end up read as if they were pixel
+    // data -- corrupting everything after the first chunk boundary.
+    //
+    // Base64-in-JSON sidesteps this: it's parsed with the exact same
+    // getString() + ArduinoJson path the ESP32 already uses successfully
+    // for /api/now-playing's metadata response, which correctly handles
+    // chunked transport because HTTPClient's own text-reading path does
+    // the de-chunking for you (unlike a manual getStreamPtr() read loop).
+    if (wantArt === 'raw') {
+      if (!imageUrl) return res.status(404).json({ error: 'no artwork' });
+      const rgb565 = await getArtworkRgb565(track.id, imageUrl);
+      return res.json({
+        artwork_base64: rgb565.toString('base64'),
+        artwork_size: ART_SIZE,
+        byte_length: rgb565.length,
+      });
     }
 
-    // RGB565 from the server is big-endian. If colors look off on a specific screen,
-    // try byte-swapping each pixel:
-    // for (size_t i = 0; i < pixelCount; i++) buf[i] = (buf[i] >> 8) | (buf[i] << 8);
-    return true;
+    // fetch the next track in queue + the artwork's dominant color
+    const [nextTrack, dominantColor] = await Promise.all([
+      getNextTrack(access_token).catch(() => null),
+      imageUrl ? getDominantColor(track.id, imageUrl).catch(() => null) : null,
+    ]);
+
+    // default mode: JSON metadata, ESP32 decides when to call ?art=raw
+    res.json(toUtf8({
+      playing: data.is_playing,
+      track_id: track.id,
+      track: track.name,
+      artist: track.artists?.[0]?.name,
+      album: track.album?.name,
+      progress_ms: data.progress_ms,
+      duration_ms: track.duration_ms,
+      has_artwork: Boolean(imageUrl),
+      artwork_size: ART_SIZE,
+      dominant_color: dominantColor, // e.g. "#a83232", null if unavailable
+      volume_percent: data.device?.volume_percent ?? null,
+      device_name: data.device?.name ?? null,
+      shuffle_state: data.shuffle_state ?? null,
+      repeat_state: data.repeat_state ?? null, // "off" | "track" | "context"
+      context_type: data.context?.type ?? null, // "playlist" | "album" | "artist" | null
+      next: nextTrack, // null if queue is empty or the fetch failed
+    }));
+  } catch (err) {
+    if (err.message === 'rate_limited') {
+      res.setHeader('Retry-After', err.retryAfter);
+      return res.status(429).json({
+        error: 'rate_limited',
+        retry_after_seconds: err.retryAfter,
+      });
+    }
+    console.error(err);
+    return res.status(500).json({ error: 'internal_error' });
   }
-
-  uint16_t hexToRgb565(const String& hex) {
-    // hex format: "#a8325f" or "a8325f"
-    String h = hex;
-    if (h.startsWith("#")) h.remove(0, 1);
-    if (h.length() != 6) return 0x0000; // fallback: black
-
-    long rgb = strtol(h.c_str(), nullptr, 16);
-    uint8_t r = (rgb >> 16) & 0xFF;
-    uint8_t g = (rgb >> 8) & 0xFF;
-    uint8_t b = rgb & 0xFF;
-
-    // RGB888 -> RGB565: 5 bits R, 6 bits G, 5 bits B
-    return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
-  }
-
-} // namespace NowPlaying
+}

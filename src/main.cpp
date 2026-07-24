@@ -105,7 +105,7 @@ static void showNowPlaying(const NowPlaying::Track& t) {
       bool ok = NowPlaying::fetchArtwork(WifiPortal::getVercelBaseUrl(), WifiPortal::getUserId(),
                                           WifiPortal::getApiKey(), artworkBuf, 120 * 120);
       if (ok) {
-        dash_artwork.chrome.setBackgroundBitmap(artworkBuf, 120, 120);
+        dash_artwork.setArtwork(artworkBuf, 120, 120);
       } else {
         Serial.println("Failed to fetch artwork, keeping the previous cover art.");
       }
@@ -134,7 +134,9 @@ static void showNowPlaying(const NowPlaying::Track& t) {
   // Playback state + progress bar refresh every poll, track change or not
   dash_playback.setState(t.isPlaying ? DASH_PLAYING : DASH_PAUSED);
   if (t.durationMs > 0) {
-    dash_playback.setProgress((float)t.progressMs / (float)t.durationMs);
+    // Drives the slide bar AND the "M:SS / M:SS" timeLabel text together;
+    // only repaints the playback element, not the whole screen.
+    dashboard_setPlaybackTime((uint32_t)(t.progressMs / 1000), (uint32_t)(t.durationMs / 1000));
   }
 
   // Update the currently active lyric line (no API call needed, just compare progress_ms)
@@ -153,7 +155,7 @@ static void showIdleScreen() {
   dash_artwork.setSongName("Not Playing");
   dash_artwork.setArtist("");
   dash_playback.setState(DASH_PAUSED);
-  dash_playback.setProgress(0.0f);
+  dashboard_setPlaybackTime(0, 0, false); // resets bar + "0:00 / 0:00" text; dashboard_draw() below repaints it
   lyricTextsCount = 0;
   dash_lyrics.setLyricsSource(lyricTextsBuf, 0);
   lastTrackId = ""; // force re-fetching artwork/lyrics once playback resumes
